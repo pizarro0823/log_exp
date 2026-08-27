@@ -3,6 +3,17 @@ import {
   guardarPlanificacion,
 } from "../services/planificacionService";
 
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+} from "@dnd-kit/core";
+
+
 const MAX_CONTENEDORES = 18;
 const MAX_PESO = 19;
 const MAX_CBM = 71;
@@ -57,8 +68,94 @@ const convertirNumero = (valor) => {
 };
 
 // ============================================================
+// CONTENEDOR ARRASTRABLE
+// ============================================================
+
+function ContenedorDraggable({
+  semana,
+  contenedor,
+  children,
+  disabled = false,
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    isDragging,
+  } = useDraggable({
+    id: `contenedor-${contenedor.id}`,
+    disabled,
+    data: {
+      tipo: "contenedor",
+      contenedor,
+      semanaId: semana.id,
+    },
+  });
+
+  const style = transform
+    ? {
+      transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+    }
+    : undefined;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+      className={
+        isDragging
+          ? "opacity-40 cursor-grabbing"
+          : "cursor-grab"
+      }
+    >
+      {children}
+    </div>
+  );
+}
+
+
+// ============================================================
+// ZONA DONDE SE PUEDE SOLTAR UN CONTENEDOR
+// ============================================================
+
+function SemanaDroppable({
+  semana,
+  children,
+}) {
+  const {
+    setNodeRef,
+    isOver,
+  } = useDroppable({
+    id: `semana-${semana.id}`,
+    data: {
+      tipo: "semana",
+      semanaId: semana.id,
+    },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={
+        isOver
+          ? "ring-4 ring-blue-400 ring-opacity-60 rounded-xl"
+          : ""
+      }
+    >
+      {children}
+    </div>
+  );
+}
+
+
+// ============================================================
 // COMPONENTE
 // ============================================================
+
+
 
 function Semanas({
   semanas = [],
@@ -66,11 +163,24 @@ function Semanas({
   disponibilidad = [],
   masterData = [],
   accessToken,
+  msalInstance,
 }) {
 
   // ==========================================================
   // MODALES
   // ==========================================================
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
+
+  const [contenedorArrastrado, setContenedorArrastrado] =
+    useState(null);
+
 
   const [modalSemana, setModalSemana] =
     useState(false);
@@ -157,6 +267,8 @@ function Semanas({
   //
   // NO AGRUPAMOS LAS FILAS DE DISPONIBILIDAD.
   // ==========================================================
+
+
 
   const crearAvailabilityKey = (
     fila,
@@ -615,6 +727,111 @@ function Semanas({
   // GUARDAR SEMANA
   // ==========================================================
 
+  // ============================================================
+  // DRAG & DROP
+  // ============================================================
+
+  const manejarDragStart = (event) => {
+    const contenedor = event?.active?.data?.current?.contenedor;
+    if (contenedor) setContenedorArrastrado(contenedor);
+  };
+
+  const manejarDragCancel = () => {
+    setContenedorArrastrado(null);
+  };
+
+  const manejarDragEnd = async (event) => {
+    const { active, over } = event;
+    setContenedorArrastrado(null);
+
+    if (!active || !over) return;
+
+    const activeData = active.data?.current;
+    const overData = over.data?.current;
+
+    if (
+      activeData?.tipo !== "contenedor" ||
+      overData?.tipo !== "semana"
+    ) {
+      return;
+    }
+
+    const semanaOrigenId = activeData.semanaId;
+    const semanaDestinoId = overData.semanaId;
+    const contenedorId = activeData?.contenedor?.id;
+
+    if (
+      !semanaOrigenId ||
+      !semanaDestinoId ||
+      !contenedorId ||
+      String(semanaOrigenId) === String(semanaDestinoId)
+    ) {
+      return;
+    }
+
+    const semanaDestino = semanas.find(
+      (semana) => String(semana.id) === String(semanaDestinoId)
+    );
+
+    if (!semanaDestino) return;
+
+    if ((semanaDestino.contenedores || []).length >= MAX_CONTENEDORES) {
+      setError(
+        `La semana ${semanaDestino.numero} ya tiene el máximo de ${MAX_CONTENEDORES} contenedores.`
+      );
+      return;
+    }
+
+    const semanaOrigen = semanas.find(
+      (semana) => String(semana.id) === String(semanaOrigenId)
+    );
+
+    if (!semanaOrigen) return;
+
+    const contenedor = (semanaOrigen.contenedores || []).find(
+      (item) => String(item.id) === String(contenedorId)
+    );
+
+    if (!contenedor) return;
+
+    const semanasActualizadas = semanas.map((semana) => {
+      if (String(semana.id) === String(semanaOrigenId)) {
+        return {
+          ...semana,
+          contenedores: (semana.contenedores || []).filter(
+            (item) => String(item.id) !== String(contenedorId)
+          ),
+        };
+      }
+
+      if (String(semana.id) === String(semanaDestinoId)) {
+        return {
+          ...semana,
+          contenedores: [
+            ...(semana.contenedores || []),
+            contenedor,
+          ],
+        };
+      }
+
+      return semana;
+    });
+
+    setSemanas(semanasActualizadas);
+    setError("");
+
+    try {
+      await guardarPlanificacionExcel(semanasActualizadas);
+      console.log("DRAG & DROP GUARDADO EN EXCEL.");
+    } catch (error) {
+      console.error("Error guardando Drag & Drop:", error);
+    }
+  };
+
+  // ============================================================
+  // GUARDAR SEMANA
+  // ============================================================
+
   const guardarSemana = () => {
 
     setError("");
@@ -690,12 +907,14 @@ function Semanas({
         ),
     };
 
-    setSemanas(
-      (actuales) => [
-        ...actuales,
-        nuevaSemana,
-      ]
-    );
+    const semanasActualizadas = [
+      ...semanas,
+      nuevaSemana,
+    ];
+
+    setSemanas(semanasActualizadas);
+
+    guardarPlanificacionExcel(semanasActualizadas);
 
     setModalSemana(false);
 
@@ -915,35 +1134,23 @@ function Semanas({
     // ACTUALIZAR
     // --------------------------------------------------------
 
-    setSemanas(
-      (actuales) =>
-        actuales.map(
-          (semana) => {
+    const semanasActualizadas = semanas.map((semana) => {
+      if (semana.id !== semanaSeleccionada.id) {
+        return semana;
+      }
 
-            if (
-              semana.id !==
-              semanaSeleccionada.id
-            ) {
-              return semana;
-            }
+      return {
+        ...semana,
+        nombreBuque: nombreBuque.trim(),
+        fechaInicio,
+        fechaFin,
+        contenedores: nuevosContenedores,
+      };
+    });
 
-            return {
+    setSemanas(semanasActualizadas);
 
-              ...semana,
-
-              nombreBuque:
-                nombreBuque.trim(),
-
-              fechaInicio,
-
-              fechaFin,
-
-              contenedores:
-                nuevosContenedores,
-            };
-          }
-        )
-    );
+    guardarPlanificacionExcel(semanasActualizadas);
 
     setModalEditar(false);
 
@@ -993,22 +1200,16 @@ function Semanas({
       return;
     }
 
-    setSemanas(
-      (actuales) =>
-        actuales
-          .filter(
-            (item) =>
-              item.id !==
-              semana.id
-          )
-          .map(
-            (item, index) => ({
-              ...item,
-              numero:
-                index + 1,
-            })
-          )
-    );
+    const semanasActualizadas = semanas
+      .filter((item) => item.id !== semana.id)
+      .map((item, index) => ({
+        ...item,
+        numero: index + 1,
+      }));
+
+    setSemanas(semanasActualizadas);
+
+    guardarPlanificacionExcel(semanasActualizadas);
   };
 
   // ==========================================================
@@ -1219,21 +1420,108 @@ function Semanas({
   };
 
   // ============================================================
+  // OBTENER TOKEN MICROSOFT VIGENTE
+  // ============================================================
+  // El accessToken recibido por props puede expirar después de un
+  // tiempo. Nunca usamos directamente ese token para guardar en
+  // Excel si tenemos MSAL disponible. Primero intentamos obtener
+  // uno nuevo de forma silenciosa.
+
+  const obtenerAccessTokenVigente = async () => {
+    if (!msalInstance) {
+      if (!accessToken) {
+        throw new Error(
+          "No existe una sesión de Microsoft disponible."
+        );
+      }
+
+      return accessToken;
+    }
+
+    const cuentas =
+      msalInstance.getAllAccounts?.() || [];
+
+    const cuenta =
+      msalInstance.getActiveAccount?.() ||
+      cuentas[0];
+
+    if (!cuenta) {
+      throw new Error(
+        "No existe una cuenta Microsoft activa. Inicia sesión nuevamente."
+      );
+    }
+
+    const request = {
+      scopes: [
+        "User.Read",
+        "Files.ReadWrite",
+      ],
+      account: cuenta,
+    };
+
+    try {
+      // ----------------------------------------------------------
+      // 1. INTENTAR TOKEN SILENCIOSO
+      // ----------------------------------------------------------
+      const response =
+        await msalInstance.acquireTokenSilent(
+          request
+        );
+
+      if (!response?.accessToken) {
+        throw new Error(
+          "Microsoft no devolvió un accessToken válido."
+        );
+      }
+
+      return response.accessToken;
+    } catch (silentError) {
+      console.warn(
+        "No fue posible renovar el token silenciosamente. Se solicitará autenticación interactiva.",
+        silentError
+      );
+
+      // ----------------------------------------------------------
+      // 2. SI EL TOKEN EXPIRÓ Y MSAL NECESITA INTERACCIÓN
+      // ----------------------------------------------------------
+      const response =
+        await msalInstance.acquireTokenPopup(
+          request
+        );
+
+      if (!response?.accessToken) {
+        throw new Error(
+          "Microsoft no devolvió un accessToken después de la autenticación."
+        );
+      }
+
+      return response.accessToken;
+    }
+  };
+
+  // ============================================================
   // GUARDAR PLANIFICACIÓN EN EXCEL
   // ============================================================
 
   const guardarPlanificacionExcel = async (semanasActualizadas) => {
-    if (!accessToken) {
-      console.warn(
-        "No existe accessToken. La planificación solo se guardó localmente."
-      );
-      return;
-    }
-
     try {
+      // ----------------------------------------------------------
+      // OBTENER SIEMPRE UN TOKEN VIGENTE
+      // ----------------------------------------------------------
+      const tokenVigente =
+        await obtenerAccessTokenVigente();
+
+      console.log(
+        "TOKEN VIGENTE OBTENIDO. GUARDANDO PLANIFICACIÓN..."
+      );
+
       await guardarPlanificacion(
-        accessToken,
+        tokenVigente,
         semanasActualizadas
+      );
+
+      console.log(
+        "PLANIFICACIÓN GUARDADA CORRECTAMENTE EN EXCEL."
       );
     } catch (error) {
       console.error(
@@ -1728,399 +2016,426 @@ function Semanas({
 
         ) : (
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
+          <DndContext
+            sensors={sensors}
+            onDragStart={manejarDragStart}
+            onDragCancel={manejarDragCancel}
+            onDragEnd={manejarDragEnd}
+          >
 
-            {semanas.map(
-              (semana) => (
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
 
-                <div
-                  key={
-                    semana.id
-                  }
-                  className="relative bg-white border border-gray-200 rounded-2xl shadow-sm overflow-visible"
+              {semanas.map((semana) => (
+                <SemanaDroppable
+                  key={semana.id}
+                  semana={semana}
                 >
 
-                  {/* =========================================
+                  <div className="relative bg-white border border-gray-200 rounded-2xl shadow-sm overflow-visible">
+
+                    {/* =========================================
                       CABECERA SEMANA
                   ========================================= */}
 
-                  <div className="bg-gray-50 border-b border-gray-200 rounded-t-2xl p-5">
+                    <div className="bg-gray-50 border-b border-gray-200 rounded-t-2xl p-5">
 
-                    <div className="flex justify-between items-start gap-3">
+                      <div className="flex justify-between items-start gap-3">
 
-                      <div>
+                        <div>
 
-                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-3">
 
-                          <h3 className="text-xl font-bold">
-                            Semana{" "}
+                            <h3 className="text-xl font-bold">
+                              Semana{" "}
+                              {
+                                semana.numero
+                              }
+                            </h3>
+
+                            <span className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full">
+
+                              {
+                                semana
+                                  ?.contenedores
+                                  ?.length ||
+                                0
+                              }{" "}
+                              contenedores
+
+                            </span>
+
+                          </div>
+
+                          <p className="text-lg font-semibold text-blue-700 mt-1">
                             {
-                              semana.numero
+                              semana.nombreBuque
                             }
-                          </h3>
+                          </p>
 
-                          <span className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full">
+                          <p className="text-sm text-gray-500 mt-1">
 
                             {
-                              semana
-                                ?.contenedores
-                                ?.length ||
-                              0
-                            }{" "}
-                            contenedores
+                              semana.fechaInicio
+                            }
 
-                          </span>
+                            {" → "}
+
+                            {
+                              semana.fechaFin
+                            }
+
+                          </p>
 
                         </div>
 
-                        <p className="text-lg font-semibold text-blue-700 mt-1">
-                          {
-                            semana.nombreBuque
+                      </div>
+
+                      <div className="flex gap-2 mt-4">
+
+                        <button
+                          onClick={() =>
+                            abrirEditarSemana(
+                              semana
+                            )
                           }
-                        </p>
+                          className="border border-gray-300 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-semibold"
+                        >
+                          Editar
+                        </button>
 
-                        <p className="text-sm text-gray-500 mt-1">
-
-                          {
-                            semana.fechaInicio
+                        <button
+                          onClick={() =>
+                            eliminarSemana(
+                              semana
+                            )
                           }
-
-                          {" → "}
-
-                          {
-                            semana.fechaFin
-                          }
-
-                        </p>
+                          className="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-semibold"
+                        >
+                          Eliminar
+                        </button>
 
                       </div>
 
                     </div>
 
-                    <div className="flex gap-2 mt-4">
-
-                      <button
-                        onClick={() =>
-                          abrirEditarSemana(
-                            semana
-                          )
-                        }
-                        className="border border-gray-300 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-semibold"
-                      >
-                        Editar
-                      </button>
-
-                      <button
-                        onClick={() =>
-                          eliminarSemana(
-                            semana
-                          )
-                        }
-                        className="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-semibold"
-                      >
-                        Eliminar
-                      </button>
-
-                    </div>
-
-                  </div>
-
-                  {/* =========================================
+                    {/* =========================================
                       CONTENEDORES APILADOS
                   ========================================= */}
 
-                  <div className="p-5">
+                    <div className="p-5">
 
-                    <div className="space-y-3">
+                      <div className="space-y-3">
 
-                      {(
-                        semana
-                          ?.contenedores ||
-                        []
-                      ).map(
-                        (contenedor) => {
+                        {(
+                          semana
+                            ?.contenedores ||
+                          []
+                        ).map(
+                          (contenedor) => {
 
-                          const porcentajePeso =
-                            Math.min(
-                              (
-                                convertirNumero(
-                                  contenedor?.peso
-                                ) /
-                                MAX_PESO
-                              ) *
-                              100,
-                              100
-                            );
+                            const porcentajePeso =
+                              Math.min(
+                                (
+                                  convertirNumero(
+                                    contenedor?.peso
+                                  ) /
+                                  MAX_PESO
+                                ) *
+                                100,
+                                100
+                              );
 
-                          const porcentajeCbm =
-                            Math.min(
-                              (
-                                convertirNumero(
-                                  contenedor?.cbm
-                                ) /
-                                MAX_CBM
-                              ) *
-                              100,
-                              100
-                            );
+                            const porcentajeCbm =
+                              Math.min(
+                                (
+                                  convertirNumero(
+                                    contenedor?.cbm
+                                  ) /
+                                  MAX_CBM
+                                ) *
+                                100,
+                                100
+                              );
 
-                          const cantidadReferencias =
-                            Array.isArray(
-                              contenedor?.referencias
-                            )
-                              ? contenedor
-                                .referencias
-                                .length
-                              : 0;
+                            const cantidadReferencias =
+                              Array.isArray(
+                                contenedor?.referencias
+                              )
+                                ? contenedor
+                                  .referencias
+                                  .length
+                                : 0;
 
-                          const cantidadCajas =
-                            Array.isArray(
-                              contenedor?.referencias
-                            )
-                              ? contenedor
-                                .referencias
-                                .reduce(
-                                  (
-                                    total,
-                                    ref
-                                  ) =>
-                                    total +
-                                    convertirNumero(
-                                      ref?.cantidadCajas
-                                    ),
-                                  0
-                                )
-                              : 0;
+                            const cantidadCajas =
+                              Array.isArray(
+                                contenedor?.referencias
+                              )
+                                ? contenedor
+                                  .referencias
+                                  .reduce(
+                                    (
+                                      total,
+                                      ref
+                                    ) =>
+                                      total +
+                                      convertirNumero(
+                                        ref?.cantidadCajas
+                                      ),
+                                    0
+                                  )
+                                : 0;
 
-                          return (
+                            return (
 
-                            <div
-                              key={
-                                contenedor.id
-                              }
-                              onClick={() =>
-                                abrirContenedor(
-                                  semana,
-                                  contenedor
-                                )
-                              }
-                              className="group relative bg-gray-50 border rounded-xl p-4 hover:border-blue-400 hover:shadow-md transition cursor-pointer"
-                            >
 
-                              <div className="flex justify-between items-center">
 
-                                <p className="font-bold text-blue-700">
-                                  {
-                                    contenedor.codigo
+                              <ContenedorDraggable
+                                key={contenedor.id}
+                                semana={semana}
+                                contenedor={contenedor}
+                              >
+
+                                <div
+                                  onClick={() =>
+                                    abrirContenedor(
+                                      semana,
+                                      contenedor
+                                    )
                                   }
-                                </p>
+                                  className="group relative bg-gray-50 border rounded-xl p-4 hover:border-blue-400 hover:shadow-md transition cursor-pointer"
+                                >
 
-                                <span className="text-xs text-gray-400">
-                                  {
-                                    cantidadReferencias
-                                  }{" "}
-                                  ref.
-                                </span>
+                                  <div className="flex justify-between items-center">
 
-                              </div>
+                                    <p className="font-bold text-blue-700">
+                                      {
+                                        contenedor.codigo
+                                      }
+                                    </p>
 
-                              {/* PESO */}
+                                    <span className="text-xs text-gray-400">
+                                      {
+                                        cantidadReferencias
+                                      }{" "}
+                                      ref.
+                                    </span>
 
-                              <div className="mt-3">
+                                  </div>
 
-                                <div className="flex justify-between text-xs">
+                                  {/* PESO */}
 
-                                  <span>
-                                    Peso
-                                  </span>
+                                  <div className="mt-3">
 
-                                  <span className="font-semibold">
+                                    <div className="flex justify-between text-xs">
 
-                                    {
-                                      convertirNumero(
-                                        contenedor?.peso
-                                      ).toFixed(
-                                        2
-                                      )
-                                    }
+                                      <span>
+                                        Peso
+                                      </span>
 
-                                    /19T
+                                      <span className="font-semibold">
 
-                                  </span>
-
-                                </div>
-
-                                <div className="w-full h-1.5 bg-gray-200 rounded-full mt-1">
-
-                                  <div
-                                    className="bg-blue-500 h-1.5 rounded-full"
-                                    style={{
-                                      width:
-                                        `${porcentajePeso}%`,
-                                    }}
-                                  />
-
-                                </div>
-
-                              </div>
-
-                              {/* CBM */}
-
-                              <div className="mt-2">
-
-                                <div className="flex justify-between text-xs">
-
-                                  <span>
-                                    CBM
-                                  </span>
-
-                                  <span className="font-semibold">
-
-                                    {
-                                      convertirNumero(
-                                        contenedor?.cbm
-                                      ).toFixed(
-                                        2
-                                      )
-                                    }
-
-                                    /71
-
-                                  </span>
-
-                                </div>
-
-                                <div className="w-full h-1.5 bg-gray-200 rounded-full mt-1">
-
-                                  <div
-                                    className="bg-green-500 h-1.5 rounded-full"
-                                    style={{
-                                      width:
-                                        `${porcentajeCbm}%`,
-                                    }}
-                                  />
-
-                                </div>
-
-                              </div>
-
-                              <div className="mt-3 text-xs text-gray-500">
-
-                                <p>
-                                  {
-                                    cantidadReferencias
-                                  }{" "}
-                                  referencias
-                                </p>
-
-                                <p>
-                                  {
-                                    cantidadCajas
-                                  }{" "}
-                                  cajas
-                                </p>
-
-                              </div>
-
-                              {/* TOOLTIP */}
-
-                              {cantidadReferencias >
-                                0 && (
-
-                                  <div className="absolute z-[999] hidden group-hover:block left-1/2 -translate-x-1/2 bottom-full mb-3 w-72">
-
-                                    <div className="bg-gray-900 text-white rounded-xl shadow-2xl p-4">
-
-                                      <p className="font-bold text-sm mb-3">
                                         {
-                                          contenedor.codigo
-                                        }
-                                      </p>
-
-                                      <div className="space-y-2">
-
-                                        {contenedor.referencias.map(
-                                          (
-                                            ref,
-                                            index
-                                          ) => (
-
-                                            <div
-                                              key={`${ref?.availabilityKey || "ref"}-${index}`}
-                                              className="border-b border-gray-700 pb-2 last:border-0"
-                                            >
-
-                                              <p className="font-semibold text-xs">
-
-                                                {
-                                                  ref?.referenciaDis ||
-                                                  ref?.referencia ||
-                                                  "Referencia"
-                                                }
-
-                                              </p>
-
-                                              <p className="text-xs text-blue-300">
-
-                                                PO:{" "}
-                                                {
-                                                  ref?.PO ||
-                                                  "-"
-                                                }
-
-                                              </p>
-
-                                              <p className="text-xs text-gray-300">
-
-                                                {
-                                                  convertirNumero(
-                                                    ref?.cantidadCajas
-                                                  )
-                                                }{" "}
-                                                cajas
-
-                                              </p>
-
-                                              <p className="text-xs text-gray-400">
-
-                                                {
-                                                  convertirNumero(
-                                                    ref?.cantidadUnidades
-                                                  )
-                                                }{" "}
-                                                unidades
-
-                                              </p>
-
-                                            </div>
-
+                                          convertirNumero(
+                                            contenedor?.peso
+                                          ).toFixed(
+                                            2
                                           )
-                                        )}
+                                        }
 
-                                      </div>
+                                        /19T
+
+                                      </span>
+
+                                    </div>
+
+                                    <div className="w-full h-1.5 bg-gray-200 rounded-full mt-1">
+
+                                      <div
+                                        className="bg-blue-500 h-1.5 rounded-full"
+                                        style={{
+                                          width:
+                                            `${porcentajePeso}%`,
+                                        }}
+                                      />
 
                                     </div>
 
                                   </div>
 
-                                )}
+                                  {/* CBM */}
 
-                            </div>
+                                  <div className="mt-2">
 
-                          );
-                        }
-                      )}
+                                    <div className="flex justify-between text-xs">
+
+                                      <span>
+                                        CBM
+                                      </span>
+
+                                      <span className="font-semibold">
+
+                                        {
+                                          convertirNumero(
+                                            contenedor?.cbm
+                                          ).toFixed(
+                                            2
+                                          )
+                                        }
+
+                                        /71
+
+                                      </span>
+
+                                    </div>
+
+                                    <div className="w-full h-1.5 bg-gray-200 rounded-full mt-1">
+
+                                      <div
+                                        className="bg-green-500 h-1.5 rounded-full"
+                                        style={{
+                                          width:
+                                            `${porcentajeCbm}%`,
+                                        }}
+                                      />
+
+                                    </div>
+
+                                  </div>
+
+                                  <div className="mt-3 text-xs text-gray-500">
+
+                                    <p>
+                                      {
+                                        cantidadReferencias
+                                      }{" "}
+                                      referencias
+                                    </p>
+
+                                    <p>
+                                      {
+                                        cantidadCajas
+                                      }{" "}
+                                      cajas
+                                    </p>
+
+                                  </div>
+
+                                  {/* TOOLTIP */}
+
+                                  {cantidadReferencias >
+                                    0 && (
+
+                                      <div className="absolute z-[999] hidden group-hover:block left-1/2 -translate-x-1/2 bottom-full mb-3 w-72">
+
+                                        <div className="bg-gray-900 text-white rounded-xl shadow-2xl p-4">
+
+                                          <p className="font-bold text-sm mb-3">
+                                            {
+                                              contenedor.codigo
+                                            }
+                                          </p>
+
+                                          <div className="space-y-2">
+
+                                            {contenedor.referencias.map(
+                                              (
+                                                ref,
+                                                index
+                                              ) => (
+
+                                                <div
+                                                  key={`${ref?.availabilityKey || "ref"}-${index}`}
+                                                  className="border-b border-gray-700 pb-2 last:border-0"
+                                                >
+
+                                                  <p className="font-semibold text-xs">
+
+                                                    {
+                                                      ref?.referenciaDis ||
+                                                      ref?.referencia ||
+                                                      "Referencia"
+                                                    }
+
+                                                  </p>
+
+                                                  <p className="text-xs text-blue-300">
+
+                                                    PO:{" "}
+                                                    {
+                                                      ref?.PO ||
+                                                      "-"
+                                                    }
+
+                                                  </p>
+
+                                                  <p className="text-xs text-gray-300">
+
+                                                    {
+                                                      convertirNumero(
+                                                        ref?.cantidadCajas
+                                                      )
+                                                    }{" "}
+                                                    cajas
+
+                                                  </p>
+
+                                                  <p className="text-xs text-gray-400">
+
+                                                    {
+                                                      convertirNumero(
+                                                        ref?.cantidadUnidades
+                                                      )
+                                                    }{" "}
+                                                    unidades
+
+                                                  </p>
+
+                                                </div>
+
+                                              )
+                                            )}
+
+                                          </div>
+
+                                        </div>
+
+                                      </div>
+
+                                    )}
+
+                                </div>
+
+                              </ContenedorDraggable>
+
+                            );
+                          }
+                        )}
+
+                      </div>
 
                     </div>
 
                   </div>
 
+                </SemanaDroppable>
+              ))}
+
+            </div>
+
+            <DragOverlay>
+              {contenedorArrastrado ? (
+                <div className="bg-white border-2 border-blue-500 rounded-xl shadow-xl p-4 w-72 opacity-95">
+                  <p className="font-bold text-blue-700">
+                    {contenedorArrastrado.codigo}
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {convertirNumero(contenedorArrastrado.peso).toFixed(2)} T · {convertirNumero(contenedorArrastrado.cbm).toFixed(2)} CBM
+                  </p>
                 </div>
+              ) : null}
+            </DragOverlay>
 
-              )
-            )}
-
-          </div>
+          </DndContext>
 
         )}
 
@@ -2358,7 +2673,7 @@ function Semanas({
 
                 <p></p>
 
-                
+
                 {/* ===========================================
                     CARGA DEL CONTENEDOR
                 =========================================== */}

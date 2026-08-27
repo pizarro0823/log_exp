@@ -411,275 +411,301 @@ function App({ msalInstance }) {
   // INICIAR SESIÓN
   // ==========================================================
 
-const cargarDatosAplicacion = async (token, cuenta) => {
+  const iniciarSesion = async () => {
 
-  try {
+    try {
 
-    setCargando(true);
-    setError("");
+      setError("");
+      setCargando(true);
 
-    setUsuario(cuenta);
-    setAccessToken(token);
+      // ------------------------------------------------------
+      // LOGIN MICROSOFT
+      // ------------------------------------------------------
 
-    // ======================================================
-    // BUSCAR EXCEL
-    // ======================================================
+      const response =
+        await msalInstance.loginPopup({
+          scopes: [
+            "User.Read",
+            "Files.ReadWrite",
+          ],
+          prompt: "select_account",
+        });
 
-    const excelEncontrado =
-      await buscarArchivoExcel(token);
+      setUsuario(response.account);
 
-    console.log(
-      "EXCEL CORRECTO:",
-      excelEncontrado
-    );
+      if (msalInstance.setActiveAccount) {
+        msalInstance.setActiveAccount(
+          response.account
+        );
+      }
 
-    setExcel(excelEncontrado);
+      const token = response.accessToken;
 
-    // ======================================================
-    // OBTENER HOJAS
-    // ======================================================
+      setAccessToken(token);
 
-    const hojasExcel =
-      await obtenerHojasExcel(
-        token,
-        excelEncontrado.id
+      // ------------------------------------------------------
+      // BUSCAR EXCEL
+      // ------------------------------------------------------
+
+      const excelEncontrado =
+        await buscarArchivoExcel(token);
+
+      console.log(
+        "EXCEL CORRECTO:",
+        excelEncontrado
       );
 
-    console.log(
-      "HOJAS DEL EXCEL CORRECTO:",
-      hojasExcel
-    );
+      setExcel(excelEncontrado);
 
-    setHojas(hojasExcel || []);
+      // ------------------------------------------------------
+      // OBTENER HOJAS
+      // ------------------------------------------------------
 
-    // ======================================================
-    // INVENTARIO
-    // ======================================================
+      const hojasExcel =
+        await obtenerHojasExcel(
+          token,
+          excelEncontrado.id
+        );
 
-    const datosInventario =
-      await obtenerInventario(
-        token,
-        excelEncontrado.id
+      console.log(
+        "HOJAS DEL EXCEL CORRECTO:",
+        hojasExcel
       );
 
-    const inventarioNormalizado =
-      convertirTablaObjetos(
+      setHojas(hojasExcel || []);
+
+      // ======================================================
+      // INVENTARIO
+      // ======================================================
+
+      const datosInventario =
+        await obtenerInventario(
+          token,
+          excelEncontrado.id
+        );
+
+      console.log(
+        "DATOS INVENTARIO CRUDOS:",
         datosInventario
       );
 
-    setInventario(
-      datosInventario || []
-    );
+      const inventarioNormalizado =
+        convertirTablaObjetos(
+          datosInventario
+        );
 
-    setInventarioObjetos(
-      inventarioNormalizado
-    );
-
-    // ======================================================
-    // DISPONIBILIDAD
-    // ======================================================
-
-    const datosDisponibilidad =
-      await obtenerDisponibilidad(
-        token,
-        excelEncontrado.id
+      console.log(
+        "INVENTARIO NORMALIZADO:",
+        inventarioNormalizado
       );
 
-    const disponibilidadNormalizada =
-      convertirTablaObjetos(
+      setInventario(
+        datosInventario || []
+      );
+
+      setInventarioObjetos(
+        inventarioNormalizado
+      );
+
+      // ======================================================
+      // DISPONIBILIDAD
+      // ======================================================
+
+      const datosDisponibilidad =
+        await obtenerDisponibilidad(
+          token,
+          excelEncontrado.id
+        );
+
+      console.log(
+        "DATOS DISPONIBILIDAD CRUDOS:",
         datosDisponibilidad
       );
 
-    setDisponibilidad(
-      datosDisponibilidad || []
-    );
+      const disponibilidadNormalizada =
+        convertirTablaObjetos(
+          datosDisponibilidad
+        );
 
-    setDisponibilidadObjetos(
-      disponibilidadNormalizada
-    );
-
-    // ======================================================
-    // SALIDAS
-    // ======================================================
-
-    const datosSalidas =
-      await obtenerSalidas(
-        token,
-        excelEncontrado.id
+      console.log(
+        "DISPONIBILIDAD NORMALIZADA:",
+        disponibilidadNormalizada
       );
 
-    setSalidas(
-      datosSalidas || []
-    );
-
-    // ======================================================
-    // TABLAS DE SALIDAS
-    // ======================================================
-
-    const tablas =
-      await comprobarTablaSalidas(
-        token,
-        excelEncontrado.id
+      setDisponibilidad(
+        datosDisponibilidad || []
       );
 
-    setTablasSalidas(
-      tablas || []
-    );
-
-    // ======================================================
-    // MASTER DATA
-    // ======================================================
-
-    const datosMaster =
-      await obtenerMasterData(
-        token,
-        excelEncontrado.id
+      setDisponibilidadObjetos(
+        disponibilidadNormalizada
       );
 
-    const masterNormalizado =
-      convertirTablaObjetos(
+      // ======================================================
+      // SALIDAS
+      // ======================================================
+
+      const datosSalidas =
+        await obtenerSalidas(
+          token,
+          excelEncontrado.id
+        );
+
+      console.log(
+        "DATOS SALIDAS:",
+        datosSalidas
+      );
+
+      setSalidas(
+        datosSalidas || []
+      );
+
+      // ======================================================
+      // TABLAS DE SALIDAS
+      // ======================================================
+
+      const tablas =
+        await comprobarTablaSalidas(
+          token,
+          excelEncontrado.id
+        );
+
+      console.log(
+        "TABLAS DE SALIDAS:",
+        tablas
+      );
+
+      setTablasSalidas(
+        tablas || []
+      );
+
+      // ======================================================
+      // MASTER DATA
+      // ======================================================
+
+      const datosMaster =
+        await obtenerMasterData(
+          token,
+          excelEncontrado.id
+        );
+
+      console.log(
+        "MASTER DATA CRUDO:",
         datosMaster
       );
 
-    setMasterData(
-      datosMaster || []
-    );
+      const masterNormalizado =
+        convertirTablaObjetos(
+          datosMaster
+        );
 
-    setMasterDataObjetos(
-      masterNormalizado
-    );
-
-    // ======================================================
-    // PLANIFICACION
-    // ======================================================
-
-    const datosPlanificacion =
-      await obtenerPlanificacion(
-        token
+      console.log(
+        "MASTER DATA NORMALIZADO:",
+        masterNormalizado
       );
 
-    const semanasCargadas =
-      convertirPlanificacionASemanas(
+      setMasterData(
+        datosMaster || []
+      );
+
+      setMasterDataObjetos(
+        masterNormalizado
+      );
+
+      // ======================================================
+      // PLANIFICACION
+      // ======================================================
+
+      const datosPlanificacion =
+        await obtenerPlanificacion(
+          token
+        );
+
+      console.log(
+        "PLANIFICACION DESDE EXCEL:",
         datosPlanificacion
       );
 
-    setSemanas(
-      semanasCargadas
-    );
+      const semanasCargadas =
+        convertirPlanificacionASemanas(
+          datosPlanificacion
+        );
 
-    console.log(
-      "=========================================="
-    );
-
-    console.log(
-      "CONEXIÓN COMPLETA CON LOGISTICSDB1.XLSM"
-    );
-
-    console.log(
-      "=========================================="
-    );
-
-  } catch (error) {
-
-    console.error(
-      "ERROR CARGANDO APLICACIÓN:",
-      error
-    );
-
-    setError(
-      error?.message ||
-      "No fue posible cargar la información."
-    );
-
-  } finally {
-
-    setCargando(false);
-
-  }
-};
-
-const iniciarSesion = async () => {
-
-  try {
-
-    setError("");
-    setCargando(true);
-
-    // ======================================================
-    // LOGIN MICROSOFT
-    // ======================================================
-
-    const response =
-      await msalInstance.loginPopup({
-
-        scopes: [
-          "User.Read",
-          "Files.ReadWrite",
-        ],
-
-        prompt: "select_account",
-
-      });
-
-    console.log(
-      "LOGIN MICROSOFT EXITOSO:",
-      response
-    );
-
-    const cuenta =
-      response.account;
-
-    const token =
-      response.accessToken;
-
-    // ======================================================
-    // CARGAR TODA LA APLICACIÓN
-    // ======================================================
-
-    await cargarDatosAplicacion(
-      token,
-      cuenta
-    );
-
-  } catch (error) {
-
-    console.error(
-      "ERROR INICIANDO SESIÓN:",
-      error
-    );
-
-    setCargando(false);
-
-    if (
-      error?.errorCode ===
-      "interaction_in_progress"
-    ) {
-
-      setError(
-        "Hay una autenticación de Microsoft en proceso. Espera unos segundos y vuelve a intentar."
+      console.log(
+        "SEMANAS RECONSTRUIDAS:",
+        semanasCargadas
       );
 
-    } else if (
-      error?.errorCode ===
-      "timed_out"
-    ) {
-
-      setError(
-        "Microsoft tardó demasiado en responder. Cierra la ventana de Microsoft y vuelve a intentar."
+      setSemanas(
+        semanasCargadas
       );
 
-    } else {
+      // ======================================================
+      // DEBUG FINAL
+      // ======================================================
 
-      setError(
-        error?.message ||
-        "No fue posible iniciar sesión con Microsoft."
+      console.log(
+        "=========================================="
       );
+
+      console.log(
+        "CONEXIÓN COMPLETA CON LOGISTICSDB1.XLSM"
+      );
+
+      console.log(
+        "=========================================="
+      );
+
+      console.log(
+        "INVENTARIO:",
+        inventarioNormalizado
+      );
+
+      console.log(
+        "DISPONIBILIDAD:",
+        disponibilidadNormalizada
+      );
+
+      console.log(
+        "MASTER DATA:",
+        masterNormalizado
+      );
+
+      console.log(
+        "=========================================="
+      );
+
+    } catch (error) {
+
+      console.error(
+        "ERROR:",
+        error
+      );
+
+      if (
+        error?.errorCode ===
+        "interaction_in_progress"
+      ) {
+
+        setError(
+          "Hay una ventana de Microsoft abierta. Ciérrala y vuelve a intentar."
+        );
+
+      } else {
+
+        setError(
+          error?.message ||
+          "Ocurrió un error al conectar con Microsoft."
+        );
+
+      }
+
+    } finally {
+
+      setCargando(false);
 
     }
 
-  }
-
-};
+  };
 
   // ==========================================================
   // CERRAR SESIÓN
@@ -851,115 +877,150 @@ const iniciarSesion = async () => {
   // INTERFAZ
   // ==========================================================
 
-  return (
+ return (
 
-    <div className="min-h-screen bg-gray-100 p-8">
+  <div className="min-h-screen bg-gray-100 p-8">
 
-      <div className="max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto">
 
-        <div className="bg-white rounded-2xl shadow-lg p-8">
+      <div className="bg-white rounded-2xl shadow-lg p-8">
+  
+        {/* ==================================================
+            ENCABEZADO
+        ================================================== */}
 
-          {/* ==================================================
-              ENCABEZADO
-          ================================================== */}
+        <div className="flex justify-between items-start">
 
-          <div className="flex justify-between items-start">
+          <div>
 
-            <div>
+            <h1 className="text-3xl font-bold text-blue-700">
+              Logistics Export Planner
+            </h1>
 
-              <h1 className="text-3xl font-bold text-blue-700">
-                Logistics Export Planner
-              </h1>
+            <p className="text-gray-500 mt-2">
+              Planificación logística conectada
+            </p>
 
-              <p className="text-gray-500 mt-2">
-                Planificación logística conectada
+          </div>
+
+          {usuario && (
+
+            <button
+              onClick={cerrarSesion}
+              className="bg-gray-700 hover:bg-gray-800 text-white py-2 px-5 rounded-lg"
+            >
+              Cerrar sesión
+            </button>
+
+          )}
+
+        </div>
+
+
+        {/* ==================================================
+            LOGIN
+        ================================================== */}
+
+        {!usuario ? (
+
+          <div className="mt-8">
+
+            <button
+              onClick={iniciarSesion}
+              disabled={cargando}
+              className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 px-6 rounded-lg"
+            >
+
+              {cargando
+                ? "Conectando..."
+                : "Iniciar sesión con Microsoft"
+              }
+
+            </button>
+
+          </div>
+
+        ) : (
+
+          <div className="mt-8">
+
+            {/* =================================================
+                USUARIO
+            ================================================= */}
+
+            <div className="bg-green-50 border border-green-200 rounded-xl p-5">
+
+              <p className="text-green-700 font-semibold">
+                ✓ DB conectado
+              </p>
+
+              <p className="mt-1">
+                USUARIO :
+                {usuario.name ||
+                  usuario.username}
               </p>
 
             </div>
 
-            {usuario && (
 
-              <button
-                onClick={cerrarSesion}
-                className="bg-gray-700 hover:bg-gray-800 text-white py-2 px-5 rounded-lg"
-              >
-                Cerrar sesión
-              </button>
+            {/* =================================================
+                EXCEL
+            ================================================= */}
 
-            )}
+            {/*
+            {excel && (
 
-          </div>
+              <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-5">
 
-          {/* ==================================================
-              LOGIN
-          ================================================== */}
-
-          {!usuario ? (
-
-            <div className="mt-8">
-
-              <button
-                onClick={iniciarSesion}
-                disabled={cargando}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 px-6 rounded-lg"
-              >
-
-                {cargando
-                  ? "Conectando..."
-                  : "Iniciar sesión con Microsoft"
-                }
-
-              </button>
-
-            </div>
-
-          ) : (
-
-            <div className="mt-8">
-
-              {/* =================================================
-                  USUARIO
-              ================================================= */}
-
-              <div className="bg-green-50 border border-green-200 rounded-xl p-5">
-
-                <p className="text-green-700 font-semibold">
-                  ✓ DB conectado
+                <p className="text-blue-700 font-semibold">
+                  Archivo conectado
                 </p>
 
-                <p className="mt-1">
-                  USUARIO :
-                  {usuario.name ||
-                    usuario.username}
+                <p className="mt-1 font-medium">
+                  {excel.name}
                 </p>
 
               </div>
 
+            )}
+            */}
+
+
+            <div className="mt-1 border-t pt-1">
+
               {/* =================================================
-                  EXCEL
+                  CARGANDO PLANIFICACIÓN
               ================================================= */}
 
-              {  /* {excel && (
+              {cargando ? (
 
-                <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-5">
+                <div className="mt-10 flex flex-col items-center justify-center py-20">
 
-                  <p className="text-blue-700 font-semibold">
-                    Archivo conectado
+                  {/* Spinner */}
+
+                  <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin">
+                  </div>
+
+                  <h2 className="mt-6 text-xl font-semibold text-gray-700">
+                    Cargando planificación...
+                  </h2>
+
+                  <p className="mt-2 text-gray-500 text-center">
+                    Estamos consultando la información y
+                    preparando los contenedores.
                   </p>
 
-                  <p className="mt-1 font-medium">
-                    {excel.name}
+                  <p className="mt-1 text-sm text-gray-400">
+                    Por favor espera unos segundos...
                   </p>
 
                 </div>
 
-              )}*/}
+              ) : (
 
-              <div className="mt-1 border-t pt-1">
-
-                {/* =================================================
-                    SEMANAS
-                ================================================= */}
+                /* =================================================
+                   SEMANAS
+                ================================================= */
 
                 <div className="mt-6 w-full overflow-x-auto">
 
@@ -972,25 +1033,28 @@ const iniciarSesion = async () => {
                       inventario={inventarioObjetos}
                       masterData={masterDataObjetos}
                       accessToken={accessToken}
+                      msalInstance={msalInstance}
                     />
 
                   </div>
 
                 </div>
 
-              </div>
+              )}
 
             </div>
 
-          )}
+          </div>
 
-        </div>
+        )}
 
       </div>
 
     </div>
 
-  );
+  </div>
+
+);
 
 }
 
