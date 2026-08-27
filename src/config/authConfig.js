@@ -5,11 +5,11 @@ export const msalConfig = {
     authority:
       "https://login.microsoftonline.com/e7219c84-b820-421f-a8e2-c256634ca8fd",
 
-    redirectUri:
-      "http://localhost:5173/redirect.html",
+ redirectUri:
+  `${window.location.origin}/redirect.html`,
 
-    postLogoutRedirectUri:
-      "http://localhost:5173/redirect.html",
+postLogoutRedirectUri:
+  `${window.location.origin}/redirect.html`,
   },
 
   cache: {
