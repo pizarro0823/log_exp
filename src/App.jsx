@@ -901,6 +901,7 @@ function App({ msalInstance }) {
               Planificación logística conectada
             </p>
 
+
           </div>
 
           {usuario && (
@@ -1051,7 +1052,7 @@ function App({ msalInstance }) {
       </div>
 
     </div>
-
+        <h1>version:1.1.1.2</h1>
   </div>
 
 );
