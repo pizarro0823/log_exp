@@ -3,13 +3,13 @@ export const msalConfig = {
     clientId: "f5c16006-8803-40b9-9509-c861b8bd330c",
 
     authority:
-      "https://login.microsoftonline.com/e7219c84-b820-421f-a8e2-c256634ca8fd",
+      "https://login.microsoftonline.com/organizations",
 
- redirectUri:
-  `${window.location.origin}/redirect.html`,
+    redirectUri:
+      `${window.location.origin}/redirect.html`,
 
-postLogoutRedirectUri:
-  `${window.location.origin}/redirect.html`,
+    postLogoutRedirectUri:
+      `${window.location.origin}/redirect.html`,
   },
 
   cache: {

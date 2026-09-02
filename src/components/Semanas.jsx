@@ -1951,6 +1951,15 @@ function Semanas({
           ENCABEZADO
       ==================================================== */}
 
+         <button
+          onClick={
+            abrirCrearSemana
+          }
+          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-3 rounded-lg"
+        >
+          + Crear semana
+        </button>
+
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
 
         <div>
@@ -1965,14 +1974,7 @@ function Semanas({
 
         </div>
 
-        <button
-          onClick={
-            abrirCrearSemana
-          }
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-3 rounded-lg"
-        >
-          + Crear semana
-        </button>
+     
 
       </div>
 
@@ -2023,401 +2025,409 @@ function Semanas({
             onDragEnd={manejarDragEnd}
           >
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
+            <div className="flex flex-nowrap gap-6 overflow-x-auto items-start pb-6">
 
               {semanas.map((semana) => (
-                <SemanaDroppable
+
+                <div
                   key={semana.id}
-                  semana={semana}
+                  className="w-[420px] min-w-[420px] shrink-0"
                 >
 
-                  <div className="relative bg-white border border-gray-200 rounded-2xl shadow-sm overflow-visible">
+                  <SemanaDroppable
+                    semana={semana}
+                  >
 
-                    {/* =========================================
+                    <div className="relative bg-white border border-gray-200 rounded-2xl shadow-sm overflow-visible">
+
+                      {/* =========================================
                       CABECERA SEMANA
                   ========================================= */}
 
-                    <div className="bg-gray-50 border-b border-gray-200 rounded-t-2xl p-5">
+                      <div className="bg-gray-50 border-b border-gray-200 rounded-t-2xl p-5">
 
-                      <div className="flex justify-between items-start gap-3">
+                        <div className="flex justify-between items-start gap-3">
 
-                        <div>
+                          <div>
 
-                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3">
 
-                            <h3 className="text-xl font-bold">
-                              Semana{" "}
+                              <h3 className="text-xl font-bold">
+                                Semana{" "}
+                                {
+                                  semana.numero
+                                }
+                              </h3>
+
+                              <span className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full">
+
+                                {
+                                  semana
+                                    ?.contenedores
+                                    ?.length ||
+                                  0
+                                }{" "}
+                                contenedores
+
+                              </span>
+
+                            </div>
+
+                            <p className="text-lg font-semibold text-blue-700 mt-1">
                               {
-                                semana.numero
+                                semana.nombreBuque
                               }
-                            </h3>
+                            </p>
 
-                            <span className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full">
+                            <p className="text-sm text-gray-500 mt-1">
 
                               {
-                                semana
-                                  ?.contenedores
-                                  ?.length ||
-                                0
-                              }{" "}
-                              contenedores
+                                semana.fechaInicio
+                              }
 
-                            </span>
+                              {" → "}
+
+                              {
+                                semana.fechaFin
+                              }
+
+                            </p>
 
                           </div>
 
-                          <p className="text-lg font-semibold text-blue-700 mt-1">
-                            {
-                              semana.nombreBuque
+                        </div>
+
+                        <div className="flex gap-2 mt-4">
+
+                          <button
+                            onClick={() =>
+                              abrirEditarSemana(
+                                semana
+                              )
                             }
-                          </p>
+                            className="border border-gray-300 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-semibold"
+                          >
+                            Editar
+                          </button>
 
-                          <p className="text-sm text-gray-500 mt-1">
-
-                            {
-                              semana.fechaInicio
+                          <button
+                            onClick={() =>
+                              eliminarSemana(
+                                semana
+                              )
                             }
-
-                            {" → "}
-
-                            {
-                              semana.fechaFin
-                            }
-
-                          </p>
+                            className="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-semibold"
+                          >
+                            Eliminar
+                          </button>
 
                         </div>
 
                       </div>
 
-                      <div className="flex gap-2 mt-4">
-
-                        <button
-                          onClick={() =>
-                            abrirEditarSemana(
-                              semana
-                            )
-                          }
-                          className="border border-gray-300 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-semibold"
-                        >
-                          Editar
-                        </button>
-
-                        <button
-                          onClick={() =>
-                            eliminarSemana(
-                              semana
-                            )
-                          }
-                          className="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-semibold"
-                        >
-                          Eliminar
-                        </button>
-
-                      </div>
-
-                    </div>
-
-                    {/* =========================================
+                      {/* =========================================
                       CONTENEDORES APILADOS
                   ========================================= */}
 
-                    <div className="p-5">
+                      <div className="p-5">
 
-                      <div className="space-y-3">
+                        <div className="space-y-3">
 
-                        {(
-                          semana
-                            ?.contenedores ||
-                          []
-                        ).map(
-                          (contenedor) => {
+                          {(
+                            semana
+                              ?.contenedores ||
+                            []
+                          ).map(
+                            (contenedor) => {
 
-                            const porcentajePeso =
-                              Math.min(
-                                (
-                                  convertirNumero(
-                                    contenedor?.peso
-                                  ) /
-                                  MAX_PESO
-                                ) *
-                                100,
-                                100
-                              );
+                              const porcentajePeso =
+                                Math.min(
+                                  (
+                                    convertirNumero(
+                                      contenedor?.peso
+                                    ) /
+                                    MAX_PESO
+                                  ) *
+                                  100,
+                                  100
+                                );
 
-                            const porcentajeCbm =
-                              Math.min(
-                                (
-                                  convertirNumero(
-                                    contenedor?.cbm
-                                  ) /
-                                  MAX_CBM
-                                ) *
-                                100,
-                                100
-                              );
+                              const porcentajeCbm =
+                                Math.min(
+                                  (
+                                    convertirNumero(
+                                      contenedor?.cbm
+                                    ) /
+                                    MAX_CBM
+                                  ) *
+                                  100,
+                                  100
+                                );
 
-                            const cantidadReferencias =
-                              Array.isArray(
-                                contenedor?.referencias
-                              )
-                                ? contenedor
-                                  .referencias
-                                  .length
-                                : 0;
+                              const cantidadReferencias =
+                                Array.isArray(
+                                  contenedor?.referencias
+                                )
+                                  ? contenedor
+                                    .referencias
+                                    .length
+                                  : 0;
 
-                            const cantidadCajas =
-                              Array.isArray(
-                                contenedor?.referencias
-                              )
-                                ? contenedor
-                                  .referencias
-                                  .reduce(
-                                    (
-                                      total,
-                                      ref
-                                    ) =>
-                                      total +
-                                      convertirNumero(
-                                        ref?.cantidadCajas
-                                      ),
-                                    0
-                                  )
-                                : 0;
-
-                            return (
-
-
-
-                              <ContenedorDraggable
-                                key={contenedor.id}
-                                semana={semana}
-                                contenedor={contenedor}
-                              >
-
-                                <div
-                                  onClick={() =>
-                                    abrirContenedor(
-                                      semana,
-                                      contenedor
+                              const cantidadCajas =
+                                Array.isArray(
+                                  contenedor?.referencias
+                                )
+                                  ? contenedor
+                                    .referencias
+                                    .reduce(
+                                      (
+                                        total,
+                                        ref
+                                      ) =>
+                                        total +
+                                        convertirNumero(
+                                          ref?.cantidadCajas
+                                        ),
+                                      0
                                     )
-                                  }
-                                  className="group relative bg-gray-50 border rounded-xl p-4 hover:border-blue-400 hover:shadow-md transition cursor-pointer"
+                                  : 0;
+
+                              return (
+
+
+
+                                <ContenedorDraggable
+                                  key={contenedor.id}
+                                  semana={semana}
+                                  contenedor={contenedor}
                                 >
 
-                                  <div className="flex justify-between items-center">
+                                  <div
+                                    onClick={() =>
+                                      abrirContenedor(
+                                        semana,
+                                        contenedor
+                                      )
+                                    }
+                                    className="group relative bg-gray-50 border rounded-xl p-4 hover:border-blue-400 hover:shadow-md transition cursor-pointer"
+                                  >
 
-                                    <p className="font-bold text-blue-700">
-                                      {
-                                        contenedor.codigo
-                                      }
-                                    </p>
+                                    <div className="flex justify-between items-center">
 
-                                    <span className="text-xs text-gray-400">
-                                      {
-                                        cantidadReferencias
-                                      }{" "}
-                                      ref.
-                                    </span>
-
-                                  </div>
-
-                                  {/* PESO */}
-
-                                  <div className="mt-3">
-
-                                    <div className="flex justify-between text-xs">
-
-                                      <span>
-                                        Peso
-                                      </span>
-
-                                      <span className="font-semibold">
-
+                                      <p className="font-bold text-blue-700">
                                         {
-                                          convertirNumero(
-                                            contenedor?.peso
-                                          ).toFixed(
-                                            2
-                                          )
+                                          contenedor.codigo
                                         }
+                                      </p>
 
-                                        /19T
-
-                                      </span>
-
-                                    </div>
-
-                                    <div className="w-full h-1.5 bg-gray-200 rounded-full mt-1">
-
-                                      <div
-                                        className="bg-blue-500 h-1.5 rounded-full"
-                                        style={{
-                                          width:
-                                            `${porcentajePeso}%`,
-                                        }}
-                                      />
-
-                                    </div>
-
-                                  </div>
-
-                                  {/* CBM */}
-
-                                  <div className="mt-2">
-
-                                    <div className="flex justify-between text-xs">
-
-                                      <span>
-                                        CBM
-                                      </span>
-
-                                      <span className="font-semibold">
-
+                                      <span className="text-xs text-gray-400">
                                         {
-                                          convertirNumero(
-                                            contenedor?.cbm
-                                          ).toFixed(
-                                            2
-                                          )
-                                        }
-
-                                        /71
-
+                                          cantidadReferencias
+                                        }{" "}
+                                        ref.
                                       </span>
 
                                     </div>
 
-                                    <div className="w-full h-1.5 bg-gray-200 rounded-full mt-1">
+                                    {/* PESO */}
 
-                                      <div
-                                        className="bg-green-500 h-1.5 rounded-full"
-                                        style={{
-                                          width:
-                                            `${porcentajeCbm}%`,
-                                        }}
-                                      />
+                                    <div className="mt-3">
+
+                                      <div className="flex justify-between text-xs">
+
+                                        <span>
+                                          Peso
+                                        </span>
+
+                                        <span className="font-semibold">
+
+                                          {
+                                            convertirNumero(
+                                              contenedor?.peso
+                                            ).toFixed(
+                                              2
+                                            )
+                                          }
+
+                                          /19T
+
+                                        </span>
+
+                                      </div>
+
+                                      <div className="w-full h-1.5 bg-gray-200 rounded-full mt-1">
+
+                                        <div
+                                          className="bg-blue-500 h-1.5 rounded-full"
+                                          style={{
+                                            width:
+                                              `${porcentajePeso}%`,
+                                          }}
+                                        />
+
+                                      </div>
 
                                     </div>
 
-                                  </div>
+                                    {/* CBM */}
 
-                                  <div className="mt-3 text-xs text-gray-500">
+                                    <div className="mt-2">
 
-                                    <p>
-                                      {
-                                        cantidadReferencias
-                                      }{" "}
-                                      referencias
-                                    </p>
+                                      <div className="flex justify-between text-xs">
 
-                                    <p>
-                                      {
-                                        cantidadCajas
-                                      }{" "}
-                                      cajas
-                                    </p>
+                                        <span>
+                                          CBM
+                                        </span>
 
-                                  </div>
+                                        <span className="font-semibold">
 
-                                  {/* TOOLTIP */}
+                                          {
+                                            convertirNumero(
+                                              contenedor?.cbm
+                                            ).toFixed(
+                                              2
+                                            )
+                                          }
 
-                                  {cantidadReferencias >
-                                    0 && (
+                                          /71
 
-                                      <div className="absolute z-[999] hidden group-hover:block left-1/2 -translate-x-1/2 bottom-full mb-3 w-72">
+                                        </span>
 
-                                        <div className="bg-gray-900 text-white rounded-xl shadow-2xl p-4">
+                                      </div>
 
-                                          <p className="font-bold text-sm mb-3">
-                                            {
-                                              contenedor.codigo
-                                            }
-                                          </p>
+                                      <div className="w-full h-1.5 bg-gray-200 rounded-full mt-1">
 
-                                          <div className="space-y-2">
+                                        <div
+                                          className="bg-green-500 h-1.5 rounded-full"
+                                          style={{
+                                            width:
+                                              `${porcentajeCbm}%`,
+                                          }}
+                                        />
 
-                                            {contenedor.referencias.map(
-                                              (
-                                                ref,
-                                                index
-                                              ) => (
+                                      </div>
 
-                                                <div
-                                                  key={`${ref?.availabilityKey || "ref"}-${index}`}
-                                                  className="border-b border-gray-700 pb-2 last:border-0"
-                                                >
+                                    </div>
 
-                                                  <p className="font-semibold text-xs">
+                                    <div className="mt-3 text-xs text-gray-500">
 
-                                                    {
-                                                      ref?.referenciaDis ||
-                                                      ref?.referencia ||
-                                                      "Referencia"
-                                                    }
+                                      <p>
+                                        {
+                                          cantidadReferencias
+                                        }{" "}
+                                        referencias
+                                      </p>
 
-                                                  </p>
+                                      <p>
+                                        {
+                                          cantidadCajas
+                                        }{" "}
+                                        cajas
+                                      </p>
 
-                                                  <p className="text-xs text-blue-300">
+                                    </div>
 
-                                                    PO:{" "}
-                                                    {
-                                                      ref?.PO ||
-                                                      "-"
-                                                    }
+                                    {/* TOOLTIP */}
 
-                                                  </p>
+                                    {cantidadReferencias >
+                                      0 && (
 
-                                                  <p className="text-xs text-gray-300">
+                                        <div className="absolute z-[999] hidden group-hover:block left-1/2 -translate-x-1/2 bottom-full mb-3 w-72">
 
-                                                    {
-                                                      convertirNumero(
-                                                        ref?.cantidadCajas
-                                                      )
-                                                    }{" "}
-                                                    cajas
+                                          <div className="bg-gray-900 text-white rounded-xl shadow-2xl p-4">
 
-                                                  </p>
+                                            <p className="font-bold text-sm mb-3">
+                                              {
+                                                contenedor.codigo
+                                              }
+                                            </p>
 
-                                                  <p className="text-xs text-gray-400">
+                                            <div className="space-y-2">
 
-                                                    {
-                                                      convertirNumero(
-                                                        ref?.cantidadUnidades
-                                                      )
-                                                    }{" "}
-                                                    unidades
+                                              {contenedor.referencias.map(
+                                                (
+                                                  ref,
+                                                  index
+                                                ) => (
 
-                                                  </p>
+                                                  <div
+                                                    key={`${ref?.availabilityKey || "ref"}-${index}`}
+                                                    className="border-b border-gray-700 pb-2 last:border-0"
+                                                  >
 
-                                                </div>
+                                                    <p className="font-semibold text-xs">
 
-                                              )
-                                            )}
+                                                      {
+                                                        ref?.referenciaDis ||
+                                                        ref?.referencia ||
+                                                        "Referencia"
+                                                      }
+
+                                                    </p>
+
+                                                    <p className="text-xs text-blue-300">
+
+                                                      PO:{" "}
+                                                      {
+                                                        ref?.PO ||
+                                                        "-"
+                                                      }
+
+                                                    </p>
+
+                                                    <p className="text-xs text-gray-300">
+
+                                                      {
+                                                        convertirNumero(
+                                                          ref?.cantidadCajas
+                                                        )
+                                                      }{" "}
+                                                      cajas
+
+                                                    </p>
+
+                                                    <p className="text-xs text-gray-400">
+
+                                                      {
+                                                        convertirNumero(
+                                                          ref?.cantidadUnidades
+                                                        )
+                                                      }{" "}
+                                                      unidades
+
+                                                    </p>
+
+                                                  </div>
+
+                                                )
+                                              )}
+
+                                            </div>
 
                                           </div>
 
                                         </div>
 
-                                      </div>
+                                      )}
 
-                                    )}
+                                  </div>
 
-                                </div>
+                                </ContenedorDraggable>
 
-                              </ContenedorDraggable>
+                              );
+                            }
+                          )}
 
-                            );
-                          }
-                        )}
+                        </div>
 
                       </div>
 
                     </div>
 
-                  </div>
+                  </SemanaDroppable>
 
-                </SemanaDroppable>
+                </div>
+
               ))}
 
             </div>

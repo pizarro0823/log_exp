@@ -4,13 +4,84 @@
 
 const GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0";
 
+// ============================================================
+// ARCHIVO CENTRAL COMPARTIDO
+// ============================================================
+//
+// El archivo ya no se busca en /me/drive.
+// Se resuelve mediante el enlace de SharePoint/OneDrive
+// compartido del archivo central.
+//
+// Configurar en Vercel y en .env.local:
+// VITE_CENTRAL_EXCEL_SHARE_URL=<enlace de LogisticsDB1.xlsm>
+//
+// IMPORTANTE:
+// El enlace debe corresponder al archivo compartido y los
+// usuarios deben tener permisos sobre ese archivo.
+//
+const CENTRAL_EXCEL_SHARE_URL =
+    import.meta.env.VITE_CENTRAL_EXCEL_SHARE_URL || "";
+
+let CENTRAL_DRIVE_ID = "";
+let CENTRAL_EXCEL_ID = "";
+
+function encodeSharingUrl(url) {
+    if (!url) {
+        throw new Error(
+            "No existe la URL de SharePoint para el archivo central."
+        );
+    }
+
+    // Convertir la URL a Base64
+    const base64 =
+        btoa(
+            unescape(
+                encodeURIComponent(url)
+            )
+        );
+
+    // Convertir Base64 a Base64URL sin padding
+    const base64Url =
+        base64
+            .replace(/\+/g, "-")
+            .replace(/\//g, "_")
+            .replace(/=+$/, "");
+
+    // Formato requerido por Microsoft Graph
+    return `u!${base64Url}`;
+}
+
+
+
+
+export function obtenerUrlExcelCentral(excelId) {
+    if (!CENTRAL_DRIVE_ID) {
+        throw new Error(
+            "No se ha resuelto el DriveId del archivo central. Primero debe ejecutarse buscarArchivoExcel()."
+        );
+    }
+
+    if (
+        CENTRAL_EXCEL_ID &&
+        String(CENTRAL_EXCEL_ID) !== String(excelId)
+    ) {
+        throw new Error(
+            "El ID del Excel recibido no corresponde al archivo central configurado."
+        );
+    }
+
+    return (
+        `${GRAPH_BASE_URL}/drives/${CENTRAL_DRIVE_ID}` +
+        `/items/${excelId}`
+    );
+}
+
 
 // ============================================================
 // FUNCIÓN GENERAL PARA LLAMAR MICROSOFT GRAPH
 // ============================================================
 
-//async function graphFetch(url, accessToken, options = {}) {
-    export async function graphFetch(url, accessToken, options = {}) {
+async function graphFetch(url, accessToken, options = {}) {
     const response = await fetch(url, {
         ...options,
 
@@ -52,29 +123,47 @@ const GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0";
 // ============================================================
 
 export async function buscarArchivoExcel(accessToken) {
-    const url =
-        `${GRAPH_BASE_URL}/me/drive/root/search(q='LogisticsDB1.xlsm')`;
-
-    const data = await graphFetch(
-        url,
-        accessToken
+    const shareToken = encodeSharingUrl(
+        CENTRAL_EXCEL_SHARE_URL
     );
 
-    const archivos =
-        data?.value || [];
+    const url =
+        `${GRAPH_BASE_URL}/shares/${shareToken}/driveItem`;
 
-    const archivo =
-        archivos.find(
-            (item) =>
-                item.name?.toLowerCase() ===
-                "logisticsdb1.xlsm"
+    let archivo;
+
+    try {
+        archivo = await graphFetch(
+            url,
+            accessToken
         );
-
-    if (!archivo) {
+    } catch (error) {
         throw new Error(
-            "No se encontró LogisticsDB1.xlsm en OneDrive."
+            `No se pudo acceder al archivo central LogisticsDB1.xlsm mediante el enlace compartido. ${error?.message || ""}`.trim()
         );
     }
+
+    if (
+        !archivo ||
+        String(archivo.name || "").toLowerCase() !==
+        "logisticsdb1.xlsm"
+    ) {
+        throw new Error(
+            "El enlace central no apunta a LogisticsDB1.xlsm."
+        );
+    }
+
+    const driveId =
+        archivo?.parentReference?.driveId;
+
+    if (!driveId || !archivo?.id) {
+        throw new Error(
+            "Microsoft Graph encontró el archivo central, pero no devolvió DriveId/ItemId."
+        );
+    }
+
+    CENTRAL_DRIVE_ID = driveId;
+    CENTRAL_EXCEL_ID = archivo.id;
 
     return archivo;
 }
@@ -89,7 +178,7 @@ export async function obtenerHojasExcel(
     excelId
 ) {
     const url =
-        `${GRAPH_BASE_URL}/me/drive/items/${excelId}/workbook/worksheets`;
+        `${obtenerUrlExcelCentral(excelId)}/workbook/worksheets`;
 
     const data =
         await graphFetch(
@@ -111,7 +200,7 @@ async function obtenerUsedRange(
     nombreHoja
 ) {
     const url =
-        `${GRAPH_BASE_URL}/me/drive/items/${excelId}` +
+        `${obtenerUrlExcelCentral(excelId)}` +
         `/workbook/worksheets('${encodeURIComponent(nombreHoja)}')` +
         `/usedRange(valuesOnly=true)`;
 
@@ -217,7 +306,7 @@ export async function comprobarTablaSalidas(
     excelId
 ) {
     const url =
-        `${GRAPH_BASE_URL}/me/drive/items/${excelId}` +
+        `${obtenerUrlExcelCentral(excelId)}` +
         `/workbook/worksheets('SALIDAS')/tables`;
 
     const data =
@@ -433,7 +522,7 @@ export async function actualizarDisponibilidad(
 
 
     const url =
-        `${GRAPH_BASE_URL}/me/drive/items/${excelId}` +
+        `${obtenerUrlExcelCentral(excelId)}` +
         `/workbook/worksheets('DISPONIBILIDAD')` +
         `/range(address='${rango}')`;
 
