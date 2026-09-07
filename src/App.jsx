@@ -949,7 +949,7 @@ function App({ msalInstance }) {
                 USUARIO
             ================================================= */}
 
-            <div className="bg-green-50 border border-green-200 rounded-xl p-5">
+          {/*   <div className="bg-green-50 border border-green-200 rounded-xl p-5">
 
               <p className="text-green-700 font-semibold">
                 ✓ DB conectado
@@ -961,7 +961,7 @@ function App({ msalInstance }) {
                   usuario.username}
               </p>
 
-            </div>
+            </div>*/}
 
 
             {/* =================================================
