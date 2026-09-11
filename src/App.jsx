@@ -12,6 +12,8 @@ import {
   obtenerSalidas,
   comprobarTablaSalidas,
   obtenerMasterData,
+  obtenerContenedoresAnteriores,
+  obtenerDetalleContenedoresAnteriores,
 } from "./services/graphService.js";
 
 import {
@@ -386,6 +388,20 @@ function App({ msalInstance }) {
   const [masterData, setMasterData] = useState([]);
 
   // ==========================================================
+  // CONTENEDORES ANTERIORES
+  // ==========================================================
+
+  const [
+    contenedoresAnteriores,
+    setContenedoresAnteriores,
+  ] = useState([]);
+
+  const [
+    detalleContenedoresAnteriores,
+    setDetalleContenedoresAnteriores,
+  ] = useState([]);
+
+  // ==========================================================
   // DATOS NORMALIZADOS
   // ==========================================================
 
@@ -612,6 +628,65 @@ function App({ msalInstance }) {
       );
 
       // ======================================================
+      // CONTENEDORES ANTERIORES
+      // ======================================================
+
+      const datosContenedoresAnteriores =
+        await obtenerContenedoresAnteriores(
+          token,
+          excelEncontrado.id
+        );
+
+      console.log(
+        "CONTENEDORES ANTERIORES CRUDOS:",
+        datosContenedoresAnteriores
+      );
+
+      const contenedoresAnterioresNormalizados =
+        convertirTablaObjetos(
+          datosContenedoresAnteriores
+        );
+
+      console.log(
+        "CONTENEDORES ANTERIORES NORMALIZADOS:",
+        contenedoresAnterioresNormalizados
+      );
+
+      setContenedoresAnteriores(
+        contenedoresAnterioresNormalizados
+      );
+
+
+      // ======================================================
+      // DETALLE CONTENEDORES ANTERIORES
+      // ======================================================
+
+      const datosDetalleContenedoresAnteriores =
+        await obtenerDetalleContenedoresAnteriores(
+          token,
+          excelEncontrado.id
+        );
+
+      console.log(
+        "DETALLE CONTENEDORES ANTERIORES CRUDOS:",
+        datosDetalleContenedoresAnteriores
+      );
+
+      const detalleContenedoresAnterioresNormalizados =
+        convertirTablaObjetos(
+          datosDetalleContenedoresAnteriores
+        );
+
+      console.log(
+        "DETALLE CONTENEDORES ANTERIORES NORMALIZADOS:",
+        detalleContenedoresAnterioresNormalizados
+      );
+
+      setDetalleContenedoresAnteriores(
+        detalleContenedoresAnterioresNormalizados
+      );
+
+      // ======================================================
       // PLANIFICACION
       // ======================================================
 
@@ -635,10 +710,265 @@ function App({ msalInstance }) {
         semanasCargadas
       );
 
-      setSemanas(
-        semanasCargadas
+      // ==========================================================
+      // INCORPORAR CONTENEDORES ANTERIORES
+      //
+      // Los contenedores anteriores:
+      // - Sí pertenecen visualmente a una semana.
+      // - Sí cuentan como contenedor.
+      // - NO pertenecen a PLANIFICACION.
+      // - NO afectan disponibilidad.
+      // - NO deben afectar los totales de cajas/unidades.
+      // ==========================================================
+
+      const semanasConAnteriores = [
+        ...(semanasCargadas || []),
+      ];
+
+      // ==========================================================
+      // AGREGAR CADA CONTENEDOR ANTERIOR
+      // ==========================================================
+
+      contenedoresAnterioresNormalizados.forEach(
+        (contenedorAnterior) => {
+
+          const idAnterior =
+            contenedorAnterior?.ID;
+
+          const numeroSemanaAnterior =
+            Number(
+              contenedorAnterior?.Semana
+            ) || 0;
+
+          // --------------------------------------------------------
+          // BUSCAR LA SEMANA DONDE DEBE APARECER
+          // --------------------------------------------------------
+
+          let semanaDestino =
+            semanasConAnteriores.find(
+              (semana) =>
+                Number(semana?.numero) ===
+                numeroSemanaAnterior
+            );
+
+          // --------------------------------------------------------
+          // SI LA SEMANA NO EXISTE EN PLANIFICACION,
+          // LA CREAMOS
+          // --------------------------------------------------------
+
+          if (!semanaDestino) {
+
+            semanaDestino = {
+
+              id:
+                `semana-anterior-${numeroSemanaAnterior}`,
+
+              numero:
+                numeroSemanaAnterior,
+
+              nombreBuque:
+                contenedorAnterior?.Buque ||
+                "",
+
+              fechaInicio:
+                "",
+
+              fechaFin:
+                "",
+
+              contenedores:
+                [],
+            };
+
+            semanasConAnteriores.push(
+              semanaDestino
+            );
+          }
+
+          // --------------------------------------------------------
+          // BUSCAR DETALLES DEL CONTENEDOR ANTERIOR
+          // --------------------------------------------------------
+
+          const detalles =
+            detalleContenedoresAnterioresNormalizados
+              .filter(
+                (detalle) =>
+                  String(
+                    detalle?.ID_Anterior ?? ""
+                  )
+                    .trim()
+                    .toUpperCase() ===
+                  String(
+                    idAnterior ?? ""
+                  )
+                    .trim()
+                    .toUpperCase()
+              );
+
+          // --------------------------------------------------------
+          // CONSTRUIR REFERENCIAS
+          // --------------------------------------------------------
+
+          const referencias =
+            detalles.map(
+              (detalle, index) => ({
+
+                availabilityKey:
+                  `ANTERIOR-${idAnterior}-${index}`,
+
+                availabilityReferenceID:
+                  null,
+
+                referenceID:
+                  null,
+
+                PO:
+                  detalle?.PO ||
+                  "",
+
+                referencia:
+                  detalle?.Referencia ||
+                  "",
+
+                referenciaDis:
+                  detalle?.Referencia ||
+                  "",
+
+                cantidadCajas:
+                  Number(
+                    detalle?.Cajas
+                  ) || 0,
+
+                cantidadUnidades:
+                  Number(
+                    detalle?.Unidades
+                  ) || 0,
+
+                descripcion:
+                  "Contenedor facturado anteriormente",
+
+                unidadesCaja:
+                  0,
+
+                cbmCaja:
+                  0,
+
+                pesoCajaKg:
+                  0,
+
+                esContenedorAnterior:
+                  true,
+              })
+            );
+
+          // --------------------------------------------------------
+          // CREAR CONTENEDOR ANTERIOR
+          // --------------------------------------------------------
+
+          const contenedorAnteriorConstruido = {
+
+            id:
+              `anterior-${idAnterior}`,
+
+            codigo:
+              contenedorAnterior?.Contenedor ||
+              idAnterior,
+
+            peso:
+              Number(
+                contenedorAnterior?.Peso
+              ) || 0,
+
+            cbm:
+              Number(
+                contenedorAnterior?.CBM
+              ) || 0,
+
+            referencias,
+
+            esContenedorAnterior:
+              true,
+
+            idAnterior,
+
+            mesFacturado:
+              contenedorAnterior?.MesFacturado ||
+              "",
+
+            mesDespacho:
+              contenedorAnterior?.MesDespacho ||
+              "",
+
+            estado:
+              contenedorAnterior?.Estado ||
+              "",
+
+            semanaAnterior:
+              numeroSemanaAnterior,
+
+            buqueAnterior:
+              contenedorAnterior?.Buque ||
+              "",
+
+            cajasAnteriores:
+              Number(
+                contenedorAnterior?.Cajas
+              ) || 0,
+
+            unidadesAnteriores:
+              Number(
+                contenedorAnterior?.Unidades
+              ) || 0,
+          };
+
+          // --------------------------------------------------------
+          // EVITAR DUPLICADOS
+          // --------------------------------------------------------
+
+          const yaExiste =
+            (semanaDestino.contenedores || [])
+              .some(
+                (contenedor) =>
+                  contenedor?.esContenedorAnterior &&
+                  String(
+                    contenedor?.idAnterior
+                  ).trim().toUpperCase() ===
+                  String(
+                    idAnterior
+                  ).trim().toUpperCase()
+              );
+
+          if (!yaExiste) {
+
+            semanaDestino.contenedores = [
+
+              ...(semanaDestino.contenedores || []),
+
+              contenedorAnteriorConstruido,
+
+            ];
+          }
+        }
       );
 
+      // ==========================================================
+      // ORDENAR SEMANAS POR NÚMERO
+      // ==========================================================
+
+      semanasConAnteriores.sort(
+        (a, b) =>
+          Number(a?.numero || 0) -
+          Number(b?.numero || 0)
+      );
+
+      console.log(
+        "SEMANAS CON CONTENEDORES ANTERIORES:",
+        semanasConAnteriores
+      );
+
+      setSemanas(
+        semanasConAnteriores
+      );
       // ======================================================
       // DEBUG FINAL
       // ======================================================
@@ -732,6 +1062,10 @@ function App({ msalInstance }) {
       setTablasSalidas([]);
 
       setMasterData([]);
+
+      setContenedoresAnteriores([]);
+
+      setDetalleContenedoresAnteriores([]);
 
       setInventarioObjetos([]);
 
@@ -877,79 +1211,79 @@ function App({ msalInstance }) {
   // INTERFAZ
   // ==========================================================
 
- return (
+  return (
 
-  <div className="min-h-screen bg-gray-100 p-8">
+    <div className="min-h-screen bg-gray-100 p-8">
 
-    <div className="max-w-7xl mx-auto">
+      <div className="max-w-7xl mx-auto">
 
-      <div className="bg-white rounded-2xl shadow-lg p-8">
-  
-        {/* ==================================================
+        <div className="bg-white rounded-2xl shadow-lg p-8">
+
+          {/* ==================================================
             ENCABEZADO
         ================================================== */}
 
-        <div className="flex justify-between items-start">
+          <div className="flex justify-between items-start">
 
-          <div>
+            <div>
 
-            <h1 className="text-3xl font-bold text-blue-700">
-              Logistics Export Planner
-            </h1>
+              <h1 className="text-3xl font-bold text-blue-700">
+                Logistics Export Planner
+              </h1>
 
-            <p className="text-gray-500 mt-2">
-              Planificación logística conectada
-            </p>
+              <p className="text-gray-500 mt-2">
+                Planificación logística conectada
+              </p>
 
+
+            </div>
+
+            {usuario && (
+
+              <button
+                onClick={cerrarSesion}
+                className="bg-gray-700 hover:bg-gray-800 text-white py-2 px-5 rounded-lg"
+              >
+                Cerrar sesión
+              </button>
+
+            )}
 
           </div>
 
-          {usuario && (
 
-            <button
-              onClick={cerrarSesion}
-              className="bg-gray-700 hover:bg-gray-800 text-white py-2 px-5 rounded-lg"
-            >
-              Cerrar sesión
-            </button>
-
-          )}
-
-        </div>
-
-
-        {/* ==================================================
+          {/* ==================================================
             LOGIN
         ================================================== */}
 
-        {!usuario ? (
+          {!usuario ? (
 
-          <div className="mt-8">
+            <div className="mt-8">
 
-            <button
-              onClick={iniciarSesion}
-              disabled={cargando}
-              className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 px-6 rounded-lg"
-            >
+              <button
+                onClick={iniciarSesion}
+                disabled={cargando}
+                className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 px-6 rounded-lg"
+              >
 
-              {cargando
-                ? "Conectando..."
-                : "Iniciar sesión con Microsoft"
-              }
+                {cargando
+                  ? "Conectando..."
+                  : "Iniciar sesión con Microsoft"
+                }
 
-            </button>
+              </button>
 
-          </div>
+            </div>
 
-        ) : (
+          ) : (
 
-          <div className="mt-8">
+            <div className="mt-8">
 
-            {/* =================================================
+              {/* =================================================
                 USUARIO
             ================================================= */}
 
-          {/*   <div className="bg-green-50 border border-green-200 rounded-xl p-5">
+              {/*   <div className="bg-green-50 border border-green-200 rounded-xl p-5">
 
               <p className="text-green-700 font-semibold">
                 ✓ DB conectado
@@ -964,11 +1298,11 @@ function App({ msalInstance }) {
             </div>*/}
 
 
-            {/* =================================================
+              {/* =================================================
                 EXCEL
             ================================================= */}
 
-            {/*
+              {/*
             {excel && (
 
               <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-5">
@@ -987,75 +1321,77 @@ function App({ msalInstance }) {
             */}
 
 
-            <div className="mt-1 border-t pt-1">
+              <div className="mt-1 border-t pt-1">
 
-              {/* =================================================
+                {/* =================================================
                   CARGANDO PLANIFICACIÓN
               ================================================= */}
 
-              {cargando ? (
+                {cargando ? (
 
-                <div className="mt-10 flex flex-col items-center justify-center py-20">
+                  <div className="mt-10 flex flex-col items-center justify-center py-20">
 
-                  {/* Spinner */}
+                    {/* Spinner */}
 
-                  <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin">
-                  </div>
+                    <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin">
+                    </div>
 
-                  <h2 className="mt-6 text-xl font-semibold text-gray-700">
-                    Cargando planificación...
-                  </h2>
+                    <h2 className="mt-6 text-xl font-semibold text-gray-700">
+                      Cargando planificación...
+                    </h2>
 
-                  <p className="mt-2 text-gray-500 text-center">
-                    Estamos consultando la información y
-                    preparando los contenedores.
-                  </p>
+                    <p className="mt-2 text-gray-500 text-center">
+                      Estamos consultando la información y
+                      preparando los contenedores.
+                    </p>
 
-                  <p className="mt-1 text-sm text-gray-400">
-                    Por favor espera unos segundos...
-                  </p>
-
-                </div>
-
-              ) : (
-
-                /* =================================================
-                   SEMANAS
-                ================================================= */
-
-                <div className="mt-6 w-full overflow-x-auto">
-
-                  <div className="min-w-max">
-
-                    <Semanas
-                      semanas={semanas}
-                      setSemanas={setSemanas}
-                      disponibilidad={disponibilidadObjetos}
-                      inventario={inventarioObjetos}
-                      masterData={masterDataObjetos}
-                      accessToken={accessToken}
-                      msalInstance={msalInstance}
-                    />
+                    <p className="mt-1 text-sm text-gray-400">
+                      Por favor espera unos segundos...
+                    </p>
 
                   </div>
 
-                </div>
+                ) : (
 
-              )}
+                  /* =================================================
+                     SEMANAS
+                  ================================================= */
+
+                  <div className="mt-6 w-full overflow-x-auto">
+
+                    <div className="min-w-max">
+
+                      <Semanas
+                        semanas={semanas}
+                        setSemanas={setSemanas}
+                        disponibilidad={disponibilidadObjetos}
+                        inventario={inventarioObjetos}
+                        masterData={masterDataObjetos}
+                        contenedoresAnteriores={contenedoresAnteriores}
+                        detalleContenedoresAnteriores={detalleContenedoresAnteriores}
+                        accessToken={accessToken}
+                        msalInstance={msalInstance}
+                      />
+
+                    </div>
+
+                  </div>
+
+                )}
+
+              </div>
 
             </div>
 
-          </div>
+          )}
 
-        )}
+        </div>
 
       </div>
-
+      <h1>version:1.1.1.2</h1>
     </div>
-        <h1>version:1.1.1.2</h1>
-  </div>
 
-);
+  );
 
 }
 

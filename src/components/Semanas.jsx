@@ -4,6 +4,10 @@ import {
 } from "../services/planificacionService";
 
 import {
+  actualizarSemanaContenedorAnterior,
+} from "../services/graphService";
+
+import {
   DndContext,
   DragOverlay,
   PointerSensor,
@@ -14,9 +18,9 @@ import {
 } from "@dnd-kit/core";
 
 
-const MAX_CONTENEDORES = 18;
-const MAX_PESO = 19;
-const MAX_CBM = 71;
+const MAX_CONTENEDORES = 25;
+const MAX_PESO = 20;
+const MAX_CBM = 75;
 const MAX_RESULTADOS = 10;
 
 // ============================================================
@@ -164,6 +168,8 @@ function Semanas({
   masterData = [],
   accessToken,
   msalInstance,
+  contenedoresAnteriores = [],
+  detalleContenedoresAnteriores = [],
 }) {
 
   // ==========================================================
@@ -315,6 +321,148 @@ function Semanas({
   // OBTENER MASTER DATA
   //
   // RELACIÓN:
+
+  // ==========================================================
+  // CONTENEDORES ANTERIORES
+  //
+  // Estos contenedores fueron facturados en un mes anterior,
+  // pero se despachan dentro de la planificación actual.
+  //
+  // IMPORTANTE:
+  // - Sí cuentan como CONTENEDOR.
+  // - NO cuentan para totales de CAJAS.
+  // - NO cuentan para totales de UNIDADES.
+  // - NO afectan DISPONIBILIDAD.
+  // - NO afectan INVENTARIO.
+  // ==========================================================
+
+  const contenedoresAnterioresNormalizados =
+    Array.isArray(contenedoresAnteriores)
+      ? contenedoresAnteriores
+      : [];
+
+  const detalleAnteriores =
+    Array.isArray(detalleContenedoresAnteriores)
+      ? detalleContenedoresAnteriores
+      : [];
+
+  const construirContenedorAnterior = (
+    contenedorAnterior
+  ) => {
+
+    const idAnterior =
+      contenedorAnterior?.ID;
+
+    const detalles =
+      detalleAnteriores.filter(
+        (detalle) =>
+          normalizarTexto(
+            detalle?.ID_Anterior
+          ) ===
+          normalizarTexto(
+            idAnterior
+          )
+      );
+
+    const referencias =
+      detalles.map(
+        (detalle, index) => ({
+          availabilityKey:
+            `ANTERIOR-${idAnterior}-${index}`,
+
+          availabilityReferenceID:
+            null,
+
+          referenceID:
+            null,
+
+          PO:
+            detalle?.PO || "",
+
+          referencia:
+            detalle?.Referencia || "",
+
+          referenciaDis:
+            detalle?.Referencia || "",
+
+          cantidadCajas:
+            convertirNumero(
+              detalle?.Cajas
+            ),
+
+          cantidadUnidades:
+            convertirNumero(
+              detalle?.Unidades
+            ),
+
+          descripcion:
+            "Contenedor facturado anteriormente",
+
+          unidadesCaja: 0,
+
+          cbmCaja: 0,
+
+          pesoCajaKg: 0,
+
+          esContenedorAnterior:
+            true,
+        })
+      );
+
+    return {
+
+      id:
+        `anterior-${idAnterior}`,
+
+      codigo:
+        contenedorAnterior?.Contenedor ||
+        idAnterior,
+
+      peso:
+        convertirNumero(
+          contenedorAnterior?.Peso
+        ),
+
+      cbm:
+        convertirNumero(
+          contenedorAnterior?.CBM
+        ),
+
+      referencias,
+
+      esContenedorAnterior:
+        true,
+
+      idAnterior,
+
+      mesFacturado:
+        contenedorAnterior?.MesFacturado,
+
+      mesDespacho:
+        contenedorAnterior?.MesDespacho,
+
+      estado:
+        contenedorAnterior?.Estado,
+
+      semanaAnterior:
+        convertirNumero(
+          contenedorAnterior?.Semana
+        ),
+
+      buqueAnterior:
+        contenedorAnterior?.Buque,
+
+      cajasAnteriores:
+        convertirNumero(
+          contenedorAnterior?.Cajas
+        ),
+
+      unidadesAnteriores:
+        convertirNumero(
+          contenedorAnterior?.Unidades
+        ),
+    };
+  };
   //
   // DISPONIBILIDAD.Referencia_dis
   // =
@@ -741,91 +889,339 @@ function Semanas({
   };
 
   const manejarDragEnd = async (event) => {
+
     const { active, over } = event;
-    setContenedorArrastrado(null);
 
-    if (!active || !over) return;
+    // ==========================================================
+    // VALIDAR DRAG
+    // ==========================================================
 
-    const activeData = active.data?.current;
-    const overData = over.data?.current;
-
-    if (
-      activeData?.tipo !== "contenedor" ||
-      overData?.tipo !== "semana"
-    ) {
+    if (!active || !over) {
+      setContenedorArrastrado(null);
       return;
     }
 
-    const semanaOrigenId = activeData.semanaId;
-    const semanaDestinoId = overData.semanaId;
-    const contenedorId = activeData?.contenedor?.id;
+    const activeData =
+      active?.data?.current;
+
+    const overData =
+      over?.data?.current;
+
+    if (!activeData || !overData) {
+      setContenedorArrastrado(null);
+      return;
+    }
+
+    // ==========================================================
+    // IDENTIFICAR SEMANAS
+    // ==========================================================
+
+    const semanaOrigenId =
+      activeData?.semanaId;
+
+    const semanaDestinoId =
+      overData?.semanaId;
 
     if (
       !semanaOrigenId ||
-      !semanaDestinoId ||
-      !contenedorId ||
-      String(semanaOrigenId) === String(semanaDestinoId)
+      !semanaDestinoId
     ) {
+      setContenedorArrastrado(null);
       return;
     }
 
-    const semanaDestino = semanas.find(
-      (semana) => String(semana.id) === String(semanaDestinoId)
-    );
+    // ==========================================================
+    // SI SE SUELTA EN LA MISMA SEMANA
+    // ==========================================================
 
-    if (!semanaDestino) return;
+    if (
+      String(semanaOrigenId) ===
+      String(semanaDestinoId)
+    ) {
+      setContenedorArrastrado(null);
+      return;
+    }
 
-    if ((semanaDestino.contenedores || []).length >= MAX_CONTENEDORES) {
+    // ==========================================================
+    // CONTENEDOR ARRASTRADO
+    // ==========================================================
+
+    const contenedorArrastradoActual =
+      activeData?.contenedor;
+
+    if (!contenedorArrastradoActual) {
+      setContenedorArrastrado(null);
+      return;
+    }
+
+    const contenedorId =
+      contenedorArrastradoActual?.id;
+
+    if (!contenedorId) {
+      setContenedorArrastrado(null);
+      return;
+    }
+
+    // ==========================================================
+    // BUSCAR SEMANA ORIGEN
+    // ==========================================================
+
+    const semanaOrigen =
+      semanas.find(
+        (semana) =>
+          String(semana?.id) ===
+          String(semanaOrigenId)
+      );
+
+    // ==========================================================
+    // BUSCAR SEMANA DESTINO
+    // ==========================================================
+
+    const semanaDestino =
+      semanas.find(
+        (semana) =>
+          String(semana?.id) ===
+          String(semanaDestinoId)
+      );
+
+    if (
+      !semanaOrigen ||
+      !semanaDestino
+    ) {
+      setError(
+        "No fue posible identificar la semana de origen o destino."
+      );
+
+      setContenedorArrastrado(null);
+      return;
+    }
+
+    // ==========================================================
+    // VALIDAR LÍMITE DE CONTENEDORES
+    // ==========================================================
+
+    const cantidadContenedoresDestino =
+      Array.isArray(
+        semanaDestino?.contenedores
+      )
+        ? semanaDestino.contenedores.length
+        : 0;
+
+    if (
+      cantidadContenedoresDestino >=
+      MAX_CONTENEDORES
+    ) {
+
       setError(
         `La semana ${semanaDestino.numero} ya tiene el máximo de ${MAX_CONTENEDORES} contenedores.`
       );
+
+      setContenedorArrastrado(null);
       return;
     }
 
-    const semanaOrigen = semanas.find(
-      (semana) => String(semana.id) === String(semanaOrigenId)
+    // ==========================================================
+    // IDENTIFICAR SI ES CONTENEDOR ANTERIOR
+    // ==========================================================
+
+    const esContenedorAnterior =
+      Boolean(
+        contenedorArrastradoActual?.esContenedorAnterior
+      );
+
+    // ==========================================================
+    // CONSTRUIR NUEVAS SEMANAS
+    // ==========================================================
+
+    const semanasActualizadas =
+      semanas.map(
+        (semana) => {
+
+          // ----------------------------------------------------
+          // SEMANA ORIGEN
+          // ----------------------------------------------------
+
+          if (
+            String(semana?.id) ===
+            String(semanaOrigenId)
+          ) {
+
+            return {
+
+              ...semana,
+
+              contenedores:
+                (
+                  semana?.contenedores ||
+                  []
+                ).filter(
+                  (contenedor) =>
+                    String(
+                      contenedor?.id
+                    ) !==
+                    String(
+                      contenedorId
+                    )
+                ),
+            };
+          }
+
+          // ----------------------------------------------------
+          // SEMANA DESTINO
+          // ----------------------------------------------------
+
+          if (
+            String(semana?.id) ===
+            String(semanaDestinoId)
+          ) {
+
+            const contenedorMovido = {
+
+              ...contenedorArrastradoActual,
+
+              // ------------------------------------------------
+              // SI ES ANTERIOR, ACTUALIZAR SEMANA VISUAL
+              // ------------------------------------------------
+
+              ...(esContenedorAnterior
+                ? {
+                  semanaAnterior:
+                    Number(
+                      semana?.numero
+                    ) || 0,
+                }
+                : {}),
+            };
+
+            return {
+
+              ...semana,
+
+              contenedores: [
+
+                ...(semana?.contenedores ||
+                  []),
+
+                contenedorMovido,
+
+              ],
+            };
+          }
+
+          // ----------------------------------------------------
+          // RESTO DE SEMANAS
+          // ----------------------------------------------------
+
+          return semana;
+        }
+      );
+
+    // ==========================================================
+    // ACTUALIZAR ESTADO VISUAL
+    // ==========================================================
+
+    setSemanas(
+      semanasActualizadas
     );
 
-    if (!semanaOrigen) return;
+    // ==========================================================
+    // CONTENEDOR ANTERIOR
+    //
+    // IMPORTANTE:
+    // NO SE GUARDA EN PLANIFICACION.
+    // ==========================================================
 
-    const contenedor = (semanaOrigen.contenedores || []).find(
-      (item) => String(item.id) === String(contenedorId)
-    );
+    if (esContenedorAnterior) {
 
-    if (!contenedor) return;
+      try {
 
-    const semanasActualizadas = semanas.map((semana) => {
-      if (String(semana.id) === String(semanaOrigenId)) {
-        return {
-          ...semana,
-          contenedores: (semana.contenedores || []).filter(
-            (item) => String(item.id) !== String(contenedorId)
-          ),
-        };
+        await actualizarSemanaContenedorAnterior(
+          accessToken,
+          contenedorArrastradoActual?.idAnterior,
+          semanaDestino?.numero
+        );
+
+        console.log(
+          "CONTENEDOR ANTERIOR MOVIDO Y GUARDADO EN EXCEL:",
+          {
+            idAnterior:
+              contenedorArrastradoActual?.idAnterior,
+
+            semanaAnterior:
+              semanaOrigen?.numero,
+
+            nuevaSemana:
+              semanaDestino?.numero,
+          }
+        );
+
+        setError("");
+
+      } catch (error) {
+
+        console.error(
+          "ERROR GUARDANDO SEMANA DEL CONTENEDOR ANTERIOR:",
+          error
+        );
+
+        // Revertir el movimiento visual
+        // si Excel no pudo actualizarse
+        setSemanas(semanas);
+
+        setError(
+          error?.message ||
+          "El contenedor anterior se movió, pero no fue posible guardar la nueva semana en Excel."
+        );
       }
 
-      if (String(semana.id) === String(semanaDestinoId)) {
-        return {
-          ...semana,
-          contenedores: [
-            ...(semana.contenedores || []),
-            contenedor,
-          ],
-        };
-      }
+      setContenedorArrastrado(null);
 
-      return semana;
-    });
+      return;
+    }
 
-    setSemanas(semanasActualizadas);
-    setError("");
+    // ==========================================================
+    // CONTENEDOR NORMAL
+    //
+    // LOS NORMALES SÍ SE GUARDAN EN PLANIFICACION.
+    // ==========================================================
 
     try {
-      await guardarPlanificacionExcel(semanasActualizadas);
-      console.log("DRAG & DROP GUARDADO EN EXCEL.");
+
+      setError("");
+
+      await guardarPlanificacionExcel(
+        semanasActualizadas
+      );
+
+      console.log(
+        "CONTENEDOR NORMAL MOVIDO Y PLANIFICACION ACTUALIZADA:",
+        {
+          contenedorId,
+          semanaOrigen:
+            semanaOrigen?.numero,
+          semanaDestino:
+            semanaDestino?.numero,
+        }
+      );
+
     } catch (error) {
-      console.error("Error guardando Drag & Drop:", error);
+
+      console.error(
+        "ERROR GUARDANDO PLANIFICACION DESPUÉS DEL DRAG:",
+        error
+      );
+
+      setError(
+        error?.message ||
+        "El contenedor se movió visualmente, pero no fue posible guardar la planificación."
+      );
     }
+
+    // ==========================================================
+    // LIMPIAR DRAG
+    // ==========================================================
+
+    setContenedorArrastrado(null);
   };
 
   // ============================================================
@@ -1220,6 +1616,14 @@ function Semanas({
     semana,
     contenedor
   ) => {
+
+    if (contenedor?.esContenedorAnterior) {
+      setError(
+        `El contenedor ${contenedor?.idAnterior || contenedor?.codigo} fue facturado anteriormente y no se puede modificar desde la planificación actual.`
+      );
+
+      return;
+    }
 
     setSemanaContenedorSeleccionada(
       semana
@@ -1943,44 +2347,79 @@ function Semanas({
   // RENDER
   // ==========================================================
 
-
   const totalGeneralCajas =
+
     (semanas || []).reduce(
+
       (total, semana) =>
+
         total +
-        (semana?.contenedores || []).reduce(
-          (subtotalSemana, contenedor) =>
-            subtotalSemana +
-            (contenedor?.referencias || []).reduce(
-              (subtotalContenedor, referencia) =>
-                subtotalContenedor +
-                convertirNumero(
-                  referencia?.cantidadCajas
-                ),
-              0
-            ),
-          0
-        ),
+
+        (semana?.contenedores || [])
+          .filter(
+            (contenedor) =>
+              !contenedor?.esContenedorAnterior
+          )
+          .reduce(
+
+            (subtotalSemana, contenedor) =>
+
+              subtotalSemana +
+
+              (contenedor?.referencias || []).reduce(
+
+                (subtotalContenedor, referencia) =>
+
+                  subtotalContenedor +
+
+                  convertirNumero(
+                    referencia?.cantidadCajas
+                  ),
+
+                0
+              ),
+
+            0
+          ),
+
       0
     );
 
   const totalGeneralUnidades =
+
     (semanas || []).reduce(
+
       (total, semana) =>
+
         total +
-        (semana?.contenedores || []).reduce(
-          (subtotalSemana, contenedor) =>
-            subtotalSemana +
-            (contenedor?.referencias || []).reduce(
-              (subtotalContenedor, referencia) =>
-                subtotalContenedor +
-                convertirNumero(
-                  referencia?.cantidadUnidades
-                ),
-              0
-            ),
-          0
-        ),
+
+        (semana?.contenedores || [])
+          .filter(
+            (contenedor) =>
+              !contenedor?.esContenedorAnterior
+          )
+          .reduce(
+
+            (subtotalSemana, contenedor) =>
+
+              subtotalSemana +
+
+              (contenedor?.referencias || []).reduce(
+
+                (subtotalContenedor, referencia) =>
+
+                  subtotalContenedor +
+
+                  convertirNumero(
+                    referencia?.cantidadUnidades
+                  ),
+
+                0
+              ),
+
+            0
+          ),
+
       0
     );
 
@@ -2092,46 +2531,44 @@ function Semanas({
               {semanas.map((semana) => {
 
                 const totalCajasSemana =
-                  Array.isArray(semana?.contenedores)
-                    ? semana.contenedores.reduce(
+                  (semana?.contenedores || [])
+                    .filter(
+                      (contenedor) =>
+                        !contenedor?.esContenedorAnterior
+                    )
+                    .reduce(
                       (total, contenedor) =>
                         total +
-                        (
-                          Array.isArray(contenedor?.referencias)
-                            ? contenedor.referencias.reduce(
-                              (subtotal, ref) =>
-                                subtotal +
-                                convertirNumero(
-                                  ref?.cantidadCajas
-                                ),
-                              0
-                            )
-                            : 0
+                        (contenedor?.referencias || []).reduce(
+                          (subtotalContenedor, referencia) =>
+                            subtotalContenedor +
+                            convertirNumero(
+                              referencia?.cantidadCajas
+                            ),
+                          0
                         ),
                       0
-                    )
-                    : 0;
+                    );
 
                 const totalUnidadesSemana =
-                  Array.isArray(semana?.contenedores)
-                    ? semana.contenedores.reduce(
+                  (semana?.contenedores || [])
+                    .filter(
+                      (contenedor) =>
+                        !contenedor?.esContenedorAnterior
+                    )
+                    .reduce(
                       (total, contenedor) =>
                         total +
-                        (
-                          Array.isArray(contenedor?.referencias)
-                            ? contenedor.referencias.reduce(
-                              (subtotal, ref) =>
-                                subtotal +
-                                convertirNumero(
-                                  ref?.cantidadUnidades
-                                ),
-                              0
-                            )
-                            : 0
+                        (contenedor?.referencias || []).reduce(
+                          (subtotalContenedor, referencia) =>
+                            subtotalContenedor +
+                            convertirNumero(
+                              referencia?.cantidadUnidades
+                            ),
+                          0
                         ),
                       0
-                    )
-                    : 0;
+                    );
 
                 return (
 
@@ -2334,16 +2771,35 @@ function Semanas({
                                           contenedor
                                         )
                                       }
-                                      className="group relative bg-gray-50 border rounded-xl p-4 hover:border-blue-400 hover:shadow-md transition cursor-pointer"
+                                      className={`group relative z-50 hover:z-[9999] rounded-xl p-4 transition cursor-pointer border-2 ${contenedor?.esContenedorAnterior
+                                          ? "bg-orange-50 border-orange-400 hover:border-orange-500 hover:shadow-md"
+                                          : "bg-gray-50 border-gray-900 hover:border-blue-400 hover:shadow-md"
+                                        }`}
                                     >
 
                                       <div className="flex justify-between items-center">
 
-                                        <p className="font-bold text-blue-700">
-                                          {
-                                            contenedor.codigo
-                                          }
-                                        </p>
+                                        <div>
+
+                                          {contenedor?.esContenedorAnterior && (
+                                            <span className="inline-flex items-center mb-2 px-2.5 py-1 rounded-full text-[10px] font-bold bg-orange-100 text-orange-700 border border-orange-300">
+                                              CONTENEDOR YA FACTURADO
+                                            </span>
+                                          )}
+
+                                          <p
+                                            className={
+                                              contenedor?.esContenedorAnterior
+                                                ? "font-bold text-orange-700"
+                                                : "font-bold text-blue-700"
+                                            }
+                                          >
+                                            {
+                                              contenedor.codigo
+                                            }
+                                          </p>
+
+                                        </div>
 
                                         <span className="text-xs text-gray-400">
                                           {
@@ -2456,8 +2912,7 @@ function Semanas({
                                       {cantidadReferencias >
                                         0 && (
 
-                                          <div className="absolute z-[999] hidden group-hover:block left-1/2 -translate-x-1/2 bottom-full mb-3 w-72">
-
+                                          <div className="absolute z-[9999] hidden group-hover:block right-0 bottom-full mb-3 w-72 pointer-events-none">
                                             <div className="bg-gray-900 text-white rounded-xl shadow-2xl p-4">
 
                                               <p className="font-bold text-sm mb-3">
@@ -2480,45 +2935,37 @@ function Semanas({
                                                     >
 
                                                       <p className="font-semibold text-xs">
-
                                                         {
                                                           ref?.referenciaDis ||
                                                           ref?.referencia ||
                                                           "Referencia"
                                                         }
-
                                                       </p>
 
                                                       <p className="text-xs text-blue-300">
-
                                                         PO:{" "}
                                                         {
                                                           ref?.PO ||
                                                           "-"
                                                         }
-
                                                       </p>
 
                                                       <p className="text-xs text-gray-300">
-
                                                         {
                                                           convertirNumero(
                                                             ref?.cantidadCajas
                                                           )
                                                         }{" "}
                                                         cajas
-
                                                       </p>
 
                                                       <p className="text-xs text-gray-400">
-
                                                         {
                                                           convertirNumero(
                                                             ref?.cantidadUnidades
                                                           )
                                                         }{" "}
                                                         unidades
-
                                                       </p>
 
                                                     </div>
@@ -2996,9 +3443,9 @@ function Semanas({
                     TABLA DISPONIBILIDAD
                 =========================================== */}
 
-                <div className="mt-5 border border-gray-300 rounded-2xl overflow-hidden">
+                <div className="mt-5 border border-gray-300 rounded-2xl overflow-visible relative z-10">
 
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto overflow-y-visible">
 
                     <table className="w-full min-w-[1100px]">
 
@@ -3107,6 +3554,7 @@ function Semanas({
                                   <p className="text-sm text-gray-400 mt-2">
 
                                     Ref ID:{" "}
+
                                     {
                                       fila?.ReferenceID ||
                                       "-"
@@ -3146,8 +3594,7 @@ function Semanas({
 
                                   <span
                                     className={
-                                      disponible >
-                                        0
+                                      disponible > 0
                                         ? "text-green-600 font-bold text-xl"
                                         : "text-red-500 font-bold text-xl"
                                     }
@@ -3174,8 +3621,7 @@ function Semanas({
                                         )
                                       }
                                       disabled={
-                                        cantidad <=
-                                        0
+                                        cantidad <= 0
                                       }
                                       className="w-12 h-12 border border-gray-300 rounded-xl hover:bg-gray-100 disabled:bg-gray-50 disabled:text-gray-300 font-bold text-xl"
                                     >
@@ -3250,6 +3696,7 @@ function Semanas({
                                       2
                                     )
                                   }{" "}
+
                                   kg
 
                                 </td>
@@ -3257,6 +3704,7 @@ function Semanas({
                               </tr>
 
                             );
+
                           }
                         )}
 
@@ -3266,17 +3714,16 @@ function Semanas({
 
                   </div>
 
-                  {disponibilidadFiltrada.length ===
-                    0 && (
+                  {disponibilidadFiltrada.length === 0 && (
 
-                      <div className="p-10 text-center text-gray-500">
+                    <div className="p-10 text-center text-gray-500">
 
-                        No se encontraron referencias
-                        para la búsqueda.
+                      No se encontraron referencias
+                      para la búsqueda.
 
-                      </div>
+                    </div>
 
-                    )}
+                  )}
 
                 </div>
 

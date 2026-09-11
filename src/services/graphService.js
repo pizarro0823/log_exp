@@ -55,6 +55,7 @@ function encodeSharingUrl(url) {
 
 
 export function obtenerUrlExcelCentral(excelId) {
+
     if (!CENTRAL_DRIVE_ID) {
         throw new Error(
             "No se ha resuelto el DriveId del archivo central. Primero debe ejecutarse buscarArchivoExcel()."
@@ -74,6 +75,197 @@ export function obtenerUrlExcelCentral(excelId) {
         `${GRAPH_BASE_URL}/drives/${CENTRAL_DRIVE_ID}` +
         `/items/${excelId}`
     );
+}
+
+
+// ============================================================
+// ACTUALIZAR SEMANA DE UN CONTENEDOR ANTERIOR
+// ============================================================
+//
+// Actualiza únicamente la columna D = Semana
+// de la hoja CONTENEDORES_ANTERIORES.
+//
+// Busca el contenedor por:
+// A = ID
+//
+// NO modifica:
+// - PLANIFICACION
+// - DISPONIBILIDAD
+// - INVENTARIO
+// - MASTER_DATA
+//
+// ============================================================
+
+export async function actualizarSemanaContenedorAnterior(
+    accessToken,
+    idAnterior,
+    nuevaSemana
+) {
+    if (!accessToken) {
+        throw new Error(
+            "No existe accessToken para actualizar el contenedor anterior."
+        );
+    }
+
+    if (!idAnterior) {
+        throw new Error(
+            "No existe el ID del contenedor anterior."
+        );
+    }
+
+    if (
+        nuevaSemana === null ||
+        nuevaSemana === undefined ||
+        nuevaSemana === ""
+    ) {
+        throw new Error(
+            "No existe la nueva semana del contenedor anterior."
+        );
+    }
+
+    // ----------------------------------------------------------
+    // 1. OBTENER EL ARCHIVO EXCEL CENTRAL
+    // ----------------------------------------------------------
+
+    const archivoExcel =
+        await buscarArchivoExcel(
+            accessToken
+        );
+
+    const excelId =
+        archivoExcel?.id;
+
+    if (!excelId) {
+        throw new Error(
+            "No fue posible obtener el ID de LogisticsDB1.xlsm."
+        );
+    }
+
+    // ----------------------------------------------------------
+    // 2. LEER CONTENEDORES_ANTERIORES
+    // ----------------------------------------------------------
+
+    const urlLectura =
+        obtenerUrlExcelCentral(excelId) +
+        `/workbook/worksheets('CONTENEDORES_ANTERIORES')` +
+        `/usedRange(valuesOnly=true)`;
+
+    const data =
+        await graphFetch(
+            urlLectura,
+            accessToken
+        );
+
+    const valores =
+        data?.values || [];
+
+    if (!Array.isArray(valores) || valores.length === 0) {
+        throw new Error(
+            "La hoja CONTENEDORES_ANTERIORES no contiene datos."
+        );
+    }
+
+    // ----------------------------------------------------------
+    // 3. BUSCAR EL ID
+    // ----------------------------------------------------------
+    //
+    // A = ID
+    // B = MesFacturado
+    // C = MesDespacho
+    // D = Semana
+    //
+    // La fila 1 contiene encabezados.
+    // ----------------------------------------------------------
+
+    const indiceFila =
+        valores.findIndex(
+            (fila, index) => {
+
+                if (index === 0) {
+                    return false;
+                }
+
+                return (
+                    String(
+                        fila?.[0] ?? ""
+                    )
+                        .trim()
+                        .toUpperCase() ===
+                    String(
+                        idAnterior
+                    )
+                        .trim()
+                        .toUpperCase()
+                );
+            }
+        );
+
+    if (indiceFila === -1) {
+        throw new Error(
+            `No se encontró el contenedor anterior ${idAnterior} en CONTENEDORES_ANTERIORES.`
+        );
+    }
+
+    // Excel usa fila 1 como encabezado.
+    // El índice 1 del array corresponde a fila 2 de Excel.
+    const numeroFilaExcel =
+        indiceFila + 1;
+
+    // ----------------------------------------------------------
+    // 4. ACTUALIZAR SOLAMENTE COLUMNA D
+    // ----------------------------------------------------------
+
+    const rango =
+        `D${numeroFilaExcel}`;
+
+    const url =
+        obtenerUrlExcelCentral(excelId) +
+        `/workbook/worksheets('CONTENEDORES_ANTERIORES')` +
+        `/range(address='${rango}')`;
+
+    await graphFetch(
+        url,
+        accessToken,
+        {
+            method: "PATCH",
+
+            body: JSON.stringify({
+                values: [
+                    [
+                        Number(
+                            nuevaSemana
+                        )
+                    ]
+                ]
+            })
+        }
+    );
+
+    // ----------------------------------------------------------
+    // 5. RESULTADO
+    // ----------------------------------------------------------
+
+    console.log(
+        "SEMANA CONTENEDOR ANTERIOR ACTUALIZADA EN EXCEL:",
+        {
+            idAnterior,
+            nuevaSemana,
+            filaExcel:
+                numeroFilaExcel,
+            rango
+        }
+    );
+
+    return {
+        ok: true,
+        idAnterior,
+        nuevaSemana:
+            Number(
+                nuevaSemana
+            ),
+        filaExcel:
+            numeroFilaExcel
+    };
 }
 
 
@@ -565,4 +757,73 @@ export async function actualizarDisponibilidad(
         filaExcel:
             numeroFila,
     };
+}// ============================================================
+// CONTENEDORES ANTERIORES
+// ============================================================
+
+// Lee los contenedores que fueron facturados en meses anteriores
+// pero que serán despachados en meses posteriores.
+//
+// IMPORTANTE:
+// Estos datos son independientes de DISPONIBILIDAD,
+// INVENTARIO y PLANIFICACION.
+//
+export async function obtenerContenedoresAnteriores(
+    accessToken,
+    excelId
+) {
+    if (!accessToken) {
+        throw new Error(
+            "No existe accessToken para obtener los contenedores anteriores."
+        );
+    }
+
+    if (!excelId) {
+        throw new Error(
+            "No existe el ID del archivo Excel."
+        );
+    }
+
+    const range =
+        await obtenerUsedRange(
+            accessToken,
+            excelId,
+            "CONTENEDORES_ANTERIORES"
+        );
+
+    return range?.values || [];
+}
+
+
+// ============================================================
+// DETALLE CONTENEDORES ANTERIORES
+// ============================================================
+
+// Lee las referencias y cantidades asociadas a cada
+// contenedor facturado anteriormente.
+//
+export async function obtenerDetalleContenedoresAnteriores(
+    accessToken,
+    excelId
+) {
+    if (!accessToken) {
+        throw new Error(
+            "No existe accessToken para obtener el detalle de los contenedores anteriores."
+        );
+    }
+
+    if (!excelId) {
+        throw new Error(
+            "No existe el ID del archivo Excel."
+        );
+    }
+
+    const range =
+        await obtenerUsedRange(
+            accessToken,
+            excelId,
+            "DETALLE_CONTENEDORES_ANTERIORES"
+        );
+
+    return range?.values || [];
 }

@@ -16,8 +16,8 @@
 //
 // ============================================================
 import {
-  buscarArchivoExcel,
-  obtenerUrlExcelCentral,
+    buscarArchivoExcel,
+    obtenerUrlExcelCentral,
 } from "./graphService";
 
 
@@ -194,7 +194,7 @@ export async function obtenerPlanificacion(accessToken) {
 //
 // ============================================================
 
-export async function asegurarHojaPlanificacion(  
+export async function asegurarHojaPlanificacion(
     accessToken,
     excelId
 ) {
@@ -389,156 +389,161 @@ function convertirSemanasAFilas(
 
             (
                 semana?.contenedores || []
-            ).forEach(
-                (contenedor) => {
+            )
+                .filter(
+                    (contenedor) =>
+                        !contenedor?.esContenedorAnterior
+                )
+                .forEach(
+                    (contenedor) => {
 
-                    (
-                        contenedor?.referencias || []
-                    ).forEach(
-                        (ref) => {
+                        (
+                            contenedor?.referencias || []
+                        ).forEach(
+                            (ref) => {
 
-                            const cantidadCajas =
-                                Number(
-                                    ref?.cantidadCajas
-                                ) || 0;
+                                const cantidadCajas =
+                                    Number(
+                                        ref?.cantidadCajas
+                                    ) || 0;
 
-                            const pesoCajaKg =
-                                Number(
-                                    ref?.pesoCajaKg
-                                ) || 0;
+                                const pesoCajaKg =
+                                    Number(
+                                        ref?.pesoCajaKg
+                                    ) || 0;
 
-                            const cbmCaja =
-                                Number(
-                                    ref?.cbmCaja
-                                ) || 0;
+                                const cbmCaja =
+                                    Number(
+                                        ref?.cbmCaja
+                                    ) || 0;
 
-                            const unidadesCaja =
-                                Number(
-                                    ref?.unidadesCaja
-                                ) || 0;
+                                const unidadesCaja =
+                                    Number(
+                                        ref?.unidadesCaja
+                                    ) || 0;
 
-                            const cantidadUnidades =
-                                Number(
-                                    ref?.cantidadUnidades
-                                ) ||
-                                (
+                                const cantidadUnidades =
+                                    Number(
+                                        ref?.cantidadUnidades
+                                    ) ||
+                                    (
+                                        cantidadCajas *
+                                        unidadesCaja
+                                    );
+
+                                const pesoTon =
+                                    (
+                                        cantidadCajas *
+                                        pesoCajaKg
+                                    ) / 1000;
+
+                                const cbmTotal =
                                     cantidadCajas *
-                                    unidadesCaja
-                                );
+                                    cbmCaja;
 
-                            const pesoTon =
-                                (
-                                    cantidadCajas *
-                                    pesoCajaKg
-                                ) / 1000;
+                                filas.push([
 
-                            const cbmTotal =
-                                cantidadCajas *
-                                cbmCaja;
+                                    // ------------------------------------------------
+                                    // ID ÚNICO DE ESTA ASIGNACIÓN
+                                    // ------------------------------------------------
 
-                            filas.push([
+                                    `${semana.id}__${contenedor.id}__${ref.availabilityKey || ref.referenceID || ref.PO || ""}`,
 
-                                // ------------------------------------------------
-                                // ID ÚNICO DE ESTA ASIGNACIÓN
-                                // ------------------------------------------------
+                                    // ------------------------------------------------
+                                    // SEMANA
+                                    // ------------------------------------------------
 
-                                `${semana.id}__${contenedor.id}__${ref.availabilityKey || ref.referenceID || ref.PO || ""}`,
+                                    valorExcel(
+                                        semana?.id
+                                    ),
 
-                                // ------------------------------------------------
-                                // SEMANA
-                                // ------------------------------------------------
+                                    valorExcel(
+                                        semana?.numero
+                                    ),
 
-                                valorExcel(
-                                    semana?.id
-                                ),
+                                    valorExcel(
+                                        semana?.nombreBuque
+                                    ),
 
-                                valorExcel(
-                                    semana?.numero
-                                ),
+                                    valorExcel(
+                                        semana?.fechaInicio
+                                    ),
 
-                                valorExcel(
-                                    semana?.nombreBuque
-                                ),
+                                    valorExcel(
+                                        semana?.fechaFin
+                                    ),
 
-                                valorExcel(
-                                    semana?.fechaInicio
-                                ),
+                                    // ------------------------------------------------
+                                    // CONTENEDOR
+                                    // ------------------------------------------------
 
-                                valorExcel(
-                                    semana?.fechaFin
-                                ),
+                                    valorExcel(
+                                        contenedor?.id
+                                    ),
 
-                                // ------------------------------------------------
-                                // CONTENEDOR
-                                // ------------------------------------------------
+                                    valorExcel(
+                                        contenedor?.codigo
+                                    ),
 
-                                valorExcel(
-                                    contenedor?.id
-                                ),
+                                    // ------------------------------------------------
+                                    // REFERENCIA
+                                    // ------------------------------------------------
 
-                                valorExcel(
-                                    contenedor?.codigo
-                                ),
+                                    valorExcel(
+                                        ref?.referenceID ||
+                                        ref?.availabilityReferenceID
+                                    ),
 
-                                // ------------------------------------------------
-                                // REFERENCIA
-                                // ------------------------------------------------
+                                    valorExcel(
+                                        ref?.PO
+                                    ),
 
-                                valorExcel(
-                                    ref?.referenceID ||
-                                    ref?.availabilityReferenceID
-                                ),
+                                    valorExcel(
+                                        ref?.referenciaDis ||
+                                        ref?.referencia
+                                    ),
 
-                                valorExcel(
-                                    ref?.PO
-                                ),
+                                    valorExcel(
+                                        ref?.descripcion
+                                    ),
 
-                                valorExcel(
-                                    ref?.referenciaDis ||
-                                    ref?.referencia
-                                ),
+                                    // ------------------------------------------------
+                                    // CANTIDADES
+                                    // ------------------------------------------------
 
-                                valorExcel(
-                                    ref?.descripcion
-                                ),
+                                    cantidadCajas,
 
-                                // ------------------------------------------------
-                                // CANTIDADES
-                                // ------------------------------------------------
+                                    unidadesCaja,
 
-                                cantidadCajas,
+                                    cantidadUnidades,
 
-                                unidadesCaja,
+                                    // ------------------------------------------------
+                                    // PESO
+                                    // ------------------------------------------------
 
-                                cantidadUnidades,
+                                    pesoCajaKg,
 
-                                // ------------------------------------------------
-                                // PESO
-                                // ------------------------------------------------
+                                    pesoTon,
 
-                                pesoCajaKg,
+                                    // ------------------------------------------------
+                                    // CBM
+                                    // ------------------------------------------------
 
-                                pesoTon,
+                                    cbmCaja,
 
-                                // ------------------------------------------------
-                                // CBM
-                                // ------------------------------------------------
+                                    cbmTotal,
 
-                                cbmCaja,
+                                    // ------------------------------------------------
+                                    // FECHA
+                                    // ------------------------------------------------
 
-                                cbmTotal,
+                                    new Date().toISOString(),
 
-                                // ------------------------------------------------
-                                // FECHA
-                                // ------------------------------------------------
-
-                                new Date().toISOString(),
-
-                            ]);
-                        }
-                    );
-                }
-            );
+                                ]);
+                            }
+                        );
+                    }
+                );
         }
     );
 
